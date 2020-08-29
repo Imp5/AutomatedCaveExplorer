@@ -6,9 +6,11 @@ https://github.com/Imp5/AutomatedCaveExplorer/raw/master/TapeFiles/Automated_Cav
 
 ## Screenshots
 
-[](https://raw.githubusercontent.com/Imp5/AutomatedCaveExplorer/master/Screenshots/screen0.png)  [](https://raw.githubusercontent.com/Imp5/AutomatedCaveExplorer/master/Screenshots/screen1.png)
+![](https://raw.githubusercontent.com/Imp5/AutomatedCaveExplorer/master/Screenshots/screen0.png)
+![](https://raw.githubusercontent.com/Imp5/AutomatedCaveExplorer/master/Screenshots/screen1.png)
 
-[](https://raw.githubusercontent.com/Imp5/AutomatedCaveExplorer/master/Screenshots/screen2.png)  [](https://raw.githubusercontent.com/Imp5/AutomatedCaveExplorer/master/Screenshots/screen3.png)
+![](https://raw.githubusercontent.com/Imp5/AutomatedCaveExplorer/master/Screenshots/screen2.png)
+![](https://raw.githubusercontent.com/Imp5/AutomatedCaveExplorer/master/Screenshots/screen3.png)
 
 ## In-game video
 
