@@ -1,0 +1,24 @@
+{
+  "0": {
+    "Labels": {},
+    "Comments": {},
+    "PrefixComments": {},
+    "Literals": {},
+    "LiteralReplacements": {},
+    "MemorySections": [
+      {
+        "StartAddress": 0,
+        "EndAddress": 15614,
+        "SectionType": 2,
+        "Lenght": 15615
+      },
+      {
+        "StartAddress": 15615,
+        "EndAddress": 48615,
+        "SectionType": 1,
+        "Lenght": 33001
+      }
+    ],
+    "DisassemblyFlags": 0
+  }
+}

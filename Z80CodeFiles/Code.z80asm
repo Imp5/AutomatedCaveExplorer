@@ -1,0 +1,5397 @@
+﻿Start:
+    .model Spectrum48
+
+F_WIDTH: .equ 32
+F_HEIGHT: .equ 22
+
+LEFT .equ (-2)
+RIGHT .equ (2)
+UP .equ (-64)
+DOWN .equ (64)
+NULL_NEXT_STEP .equ (0b10000000)
+DRAW_WITH_OFFSET .equ (0b01000000)
+
+PLAYER_CAN_MOVE_LEFT_BIT .equ 0
+PLAYER_CAN_MOVE_RIGHT_BIT .equ 1
+PLAYER_CAN_MOVE_UP_BIT .equ 2
+PLAYER_CAN_MOVE_DOWN_BIT .equ 3
+
+
+    .org 25000
+    jp start1
+
+level_addr_table:
+    .dw packed_level_1_1
+    .dw packed_level_1_2
+    .dw packed_level_1_3
+    .dw packed_level_1_4
+    .dw packed_level_1_5
+    .dw packed_level_2_1
+    .dw packed_level_2_2
+    .dw packed_level_2_3
+    .dw packed_level_2_4
+    .dw packed_level_2_5
+    .dw packed_level_3_1
+    .dw packed_level_3_2
+    .dw packed_level_3_3
+    .dw packed_level_3_4
+    .dw packed_level_3_5
+    .dw packed_level_4_1
+    .dw packed_level_4_2
+    .dw packed_level_4_3
+    .dw packed_level_4_4
+    .dw packed_level_4_5
+
+    .dw packed_level_4_5 // extra
+
+packed_level_1_1:
+    .includebin "../Levels/@e1.ogg"
+packed_level_1_2:
+    .includebin "../Levels/@m2.ogg"
+packed_level_1_3:
+    .includebin "../Levels/@m4.ogg"
+packed_level_1_4:
+    .includebin "../Levels/@h3.ogg"
+packed_level_1_5:
+    .includebin "../Levels/@a1.ogg"
+
+packed_level_2_1:
+    .includebin "../Levels/@e2.ogg"
+packed_level_2_2:
+    .includebin "../Levels/@m3.ogg"
+packed_level_2_3:
+    .includebin "../Levels/@m5.ogg"
+packed_level_2_4:
+    .includebin "../Levels/@h2.ogg"
+packed_level_2_5:
+    .includebin "../Levels/@a2.ogg"
+
+packed_level_3_1:
+    .includebin "../Levels/@m1.ogg"
+packed_level_3_2:
+    .includebin "../Levels/@m6.ogg"
+packed_level_3_3:
+    .includebin "../Levels/@h5.ogg"
+packed_level_3_4:
+    .includebin "../Levels/@h8.ogg"
+packed_level_3_5:
+    .includebin "../Levels/@a4.ogg"
+
+packed_level_4_1:
+    .includebin "../Levels/@e3.ogg"
+packed_level_4_2:
+    .includebin "../Levels/@h1.ogg"
+packed_level_4_3:
+    .includebin "../Levels/@h4.ogg"
+packed_level_4_4:
+    .includebin "../Levels/@h6.ogg"
+packed_level_4_5:
+    .includebin "../Levels/@a3.ogg"
+
+
+    .org 0x7F7F
+    jp interrupt_handler
+start1:
+    ei
+    halt
+    di
+    // initialize stack
+    ld hl, 0xFF00
+    ld de, 0xFF00 + 1
+    ld bc, 255
+    ld (hl), 0
+    ldir
+    ld sp, 0xFFFF - 2
+
+    // initialize im 2
+    ld hl, 0xFE00
+    ld a, h
+    ld i, a
+    ld de, 0xFE00 + 1
+    ld bc, 256
+    ld (hl), 0x7F
+    ldir
+    im 2
+    ei
+
+    call copy_title_from_screen
+    call test_broken_kempston
+    call music_proc
+    call fade_to_white
+    call fade_out
+    call fade_out
+    jp start_of_exec
+
+
+    .org 32768
+sprites_bin:
+    .includebin "../Graphics/sprites.bin"
+font_bin:
+    .align 256
+    .includebin "../Graphics/font.bin"
+
+    .align 4
+sprite_remap_index:
+    .db 63, 63, 63, 63  // 0
+    .db 37 + 0, 37 + 0, 37 + 0, 37 + 0  // 1
+    .db 35, 35, 35, 35  // 2
+    .db 39 + 0, 39 + 0, 39 + 0, 39 + 0  // 3
+    .db 32, 32, 32, 32  // 4
+    .db 33, 33, 33, 33  // 5
+    .db 15, 15, 15, 15  // 6
+    .db 34, 34, 34, 34  // 7
+    .db 36 + 0, 36 + 0, 36 + 0, 36 + 0  // 8
+    .db 4, 5, 6, 7  // 9
+    .db 38 + 0, 38 + 0, 38 + 0, 38 + 0  // 10
+    .db 8, 9, 10, 11  // 11
+    .db 24, 25, 26, 27  // 12
+    .db 24, 25, 26, 27  // 13
+    .db 20, 21, 22, 23  // 14
+    .db 28, 29, 28, 29  // 15
+    .db 30, 31, 30, 31  // 16
+    .db 30, 31, 30, 31  // 17
+    .db 28, 29, 28, 29  // 18
+    .db 16, 16, 16, 16  // 19
+    .db 17, 17, 17, 17  // 20
+    .db 18, 18, 18, 18  // 21
+    .db 19, 19, 19, 19  // 22
+    .db 12, 13, 14, 13  // 23
+    .db 63, 63, 63, 63  // 24 // initially player drawn as black square
+    .db 16, 16, 16, 16  // 25
+    .db 17, 17, 17, 17  // 26
+    .db 17, 17, 17, 17  // 27 // explode to crystals
+    .db 17, 17, 17, 17  // 28 // explode to void
+    .db 61, 61, 61, 61  // 29 // dead player before falling
+    .db 62, 62, 62, 62  // 30 // dead player fallen
+    .db 0, 1, 2, 3  // 31  real player sprite
+
+sprite_remap_index_for_main_menu:
+    .db 63, 63, 63, 63  // 0
+    .db 52, 52, 52, 52  // 1
+    .db 53, 53, 53, 53  // 2
+    .db 54, 54, 54, 54  // 3
+    .db 55, 55, 55, 55  // 4
+    .db 56, 56, 56, 56  // 5
+    .db 57, 57, 57, 57  // 6
+
+
+    .align 256
+sprite_remap_address:
+    .fillb 32 * 2 * 4, 0
+
+    .align 256
+randoms:
+    .db 0xD1, 0x28, 0x57, 0x2D, 0xE7, 0x6E, 0x47, 0x6F, 0xF5, 0x36, 0xC3, 0x5C, 0xF4, 0x5A, 0xF6, 0xFE
+    .db 0x83, 0x3C, 0xEE, 0x33, 0x1F, 0x9D, 0xF0, 0x45, 0x30, 0x4B, 0x10, 0xB7, 0xB6, 0x03, 0xFC, 0x68
+    .db 0xA0, 0x07, 0xE6, 0x1E, 0x82, 0xB9, 0xAA, 0x54, 0xD3, 0xC7, 0xC4, 0xB8, 0x48, 0x66, 0xB4, 0x0A
+    .db 0x56, 0x91, 0x71, 0x96, 0xCA, 0x6A, 0xFF, 0xC2, 0x64, 0x23, 0x52, 0x17, 0x8A, 0x74, 0xB3, 0x72
+    .db 0xEF, 0xE5, 0x34, 0x97, 0x00, 0xD2, 0xAD, 0x8F, 0x87, 0xA1, 0x35, 0xAE, 0xCF, 0x95, 0x3D, 0x46
+    .db 0x7B, 0xAB, 0x61, 0xA2, 0xE3, 0x73, 0xFA, 0x04, 0x58, 0xBA, 0xE4, 0x40, 0x25, 0xEB, 0x27, 0x4E
+    .db 0xE8, 0xAF, 0x6C, 0x2C, 0x1D, 0xE9, 0xCE, 0x3B, 0xC1, 0x8D, 0x70, 0x2E, 0x76, 0xDF, 0x99, 0x20
+    .db 0xBF, 0x7A, 0xC6, 0x90, 0xDC, 0x21, 0x94, 0x29, 0x67, 0x5F, 0x32, 0x50, 0x2A, 0x5D, 0x85, 0x63
+    .db 0x01, 0x60, 0xF2, 0x8C, 0x75, 0xC8, 0x41, 0xF8, 0x09, 0xDE, 0xD7, 0x31, 0xB5, 0x98, 0x0F, 0x38
+    .db 0xCB, 0x4A, 0x18, 0x59, 0xDB, 0x44, 0x3E, 0x84, 0xA6, 0xB2, 0x62, 0x42, 0xCC, 0x53, 0x4F, 0x24
+    .db 0x78, 0x7D, 0x65, 0x0C, 0x9B, 0x89, 0x4C, 0x19, 0xB0, 0x3F, 0xD0, 0x9E, 0xE1, 0x14, 0x88, 0xA4
+    .db 0x12, 0x81, 0xC5, 0xD8, 0x51, 0x55, 0xEA, 0xBC, 0x37, 0x92, 0xA7, 0xC9, 0x26, 0x15, 0xDD, 0x7F
+    .db 0x9F, 0x1B, 0xCD, 0x43, 0x2F, 0x3A, 0x39, 0xA5, 0x08, 0x11, 0xBD, 0x6B, 0x9A, 0xD6, 0xE2, 0x1C
+    .db 0x77, 0x22, 0x02, 0x5E, 0x49, 0x6D, 0xD9, 0xF9, 0xF7, 0xFD, 0xED, 0xF1, 0x16, 0x0D, 0xA3, 0xF3
+    .db 0xB1, 0xFB, 0x7C, 0x86, 0xA9, 0x8B, 0x0B, 0x4D, 0xC0, 0xBB, 0x2B, 0x79, 0x93, 0x69, 0x05, 0x1A
+    .db 0xD5, 0xBE, 0xE0, 0x9C, 0x13, 0xA8, 0x06, 0xD4, 0x80, 0x5B, 0xAC, 0xDA, 0x8E, 0xEC, 0x7E, 0x0E
+
+
+start_of_exec:
+    ld hl, sprite_remap_index_for_main_menu
+    call init_sprite_remap
+    call reset_gameplay_variables
+
+    jp go_to_info_screen
+
+gameplay_loop:
+    ld a, (need_restart_level)
+    or a
+    jp z, loop_skip_restart
+    call fade_out
+    call load_level
+loop_skip_restart:
+    ld a, (need_go_to_main_map)
+    or a
+    jp z, loop_skip_go_to_main_map
+    call fade_out
+    jp go_to_main_map
+loop_skip_go_to_main_map:
+    ld a, (need_go_to_next_level)
+    or a
+    jp z, loop_skip_next_level
+    call sfx_next_exit_level
+    call fade_to_white
+    jp on_level_complete
+
+loop_skip_next_level:
+    call update_level_post
+
+    ld e, 255 // cannot push
+    call control_character
+    call test_player_can_move
+    call center_camera_on_player
+    call render_loop
+    call blink_go_to_exit    
+    call immediate_control_player
+    call update_level_main
+    ld e, 0 // can push
+    call control_character
+    call test_player_can_move
+    call center_camera_on_player
+    call render_loop
+    call blink_go_to_exit
+    call immediate_control_player
+    jp gameplay_loop
+
+
+blink_go_to_exit:
+    ret
+    ld a, 1
+    inc a
+    inc a
+    ld (blink_go_to_exit + 2), a
+    and 0b111
+    or 64
+    ld hl, 16384 + 2048 * 3 + 32 * 23
+.loop 10
+    ld (hl), a
+    inc l
+.endl
+    ret
+
+render_loop:
+    ld hl, (camera_pos_y)
+    ex de, hl
+    ld bc, begin_of_buffers
+
+    call init_batch
+    halt
+
+    ld bc, 565
+wait_loop:
+    dec bc
+    ld a, b
+    or c
+    jr nz, wait_loop
+
+    ld a, (is_player_controllable)
+    or a
+    call nz, render_player_to_batch
+
+    // save character last drawing address for immediate draw
+    ld hl, (camera_pos_y)
+    ex de, hl
+    ld hl, (player_y)
+    xor a
+    sbc hl, de
+    ex de, hl
+    call get_bits_address
+    ld (last_player_bits + 1), hl
+    call get_attr_address
+    ld (im_last_player_attr + 1), hl
+
+    ld d, (16384 + 256 * 3 * 8)/256  //attribute_start / 256
+    ld e, 16384/256  //bits_start / 256
+    ld h, e
+    ld l, 0
+    ld (end_of_render_field + 1), sp
+    
+    di
+    ld sp, begin_of_buffers
+    ret // start render
+
+end_of_render_field:
+    ld sp, 0
+    ei
+    ret
+
+
+///////////////////////////////////////
+/////////   Base Routines   ///////////
+///////////////////////////////////////
+
+get_bits_address:
+    // input: D - x, E - y
+    // output: HL
+    ld a, e
+    and a, 0b00011000
+    add a, 0x40
+    ld h, a
+    ld a, e
+    and a, 0b00000111
+    rrca
+    rrca
+    rrca
+    add a, d
+    ld l, a
+    ret
+
+
+get_attr_address:
+    // input: D - x, E - y
+    // output: HL
+    ld a, e
+    rrca
+    rrca
+    rrca
+    ld h, a
+    and 0b11100000
+    or d
+    ld l, a
+    ld a, h
+    and 0b00000011
+    or  0b01011000
+    ld h, a
+    ret
+
+
+render_text_xy:
+    // input: D - x, E - y
+    //        A - attributes
+    //        BC - text (zero - end of string)
+    ld (render_text_attrib_a + 1), a
+    call get_attr_address
+    push hl
+    call get_bits_address
+    ld ixl, 0
+render_text_xy_loop:
+    ld a, (bc)
+    or a
+    jp z, render_text_attrib
+    push hl
+    sub a, 32
+    add a, a
+    add a, a
+    add a, a
+    ld d, font_bin / 256
+    jp nc, render_text_xy_skip1
+    inc d
+render_text_xy_skip1:
+    ld (hl), 255
+    ld e, a
+
+    .loop 7
+        ld a, (de)
+        ld (hl), a
+        inc e
+        inc h
+    .endl
+    ld a, (de)
+    ld (hl), a
+    
+    pop hl
+    inc l
+    inc bc
+    inc ixl
+    jp render_text_xy_loop
+
+render_text_attrib:
+    pop hl
+    ld a, ixl
+    or a
+    ret z
+    ld b, a
+render_text_attrib_a:
+    ld a, 0
+render_text_attrib_loop:
+    ld (hl), a
+    inc l
+    djnz render_text_attrib_loop
+    ret
+
+
+num_to_string_255:
+    // A - number to convert
+    // HL - location of ASCII string
+    // BC - trashed
+    cp 10
+    jp c, nts_X
+    cp 100
+    jp c, nts_XX
+    cp 200
+    jp c, nts_1XX
+nts_2XX:
+    ld (hl), '2'
+    inc hl
+    sub 200
+    jp nts_XX
+nts_1XX:
+    ld (hl), '1'
+    inc hl
+    sub 100
+nts_XX:
+    ld c, 10
+    ld b, 255
+nts_X_loop:
+    inc b
+    sub c
+    jp nc, nts_X_loop
+    add a, c
+    ld c, a // c - reminder
+    ld a, '0'
+    add a, b
+    ld (hl), a
+    inc hl
+    ld a, c
+nts_X:
+    add a, '0'
+    ld (hl), a
+    inc hl
+    ret
+
+
+num_to_string:
+    // HL - number to convert, DE - location of ASCII string
+    // (will not add '\0' at the end of number)
+    xor a // nop
+    ld (num_to_string_ret), a
+
+    ld bc, -10000
+    call num_to_string1
+    ld bc, -1000
+    call num_to_string1
+    ld bc, -100
+    call num_to_string1
+    ld c, -10
+    call num_to_string1
+    ld c, b
+
+num_to_string1:
+    ld a, '0'-1
+num_to_string2:
+    inc a
+    add hl, bc
+    jr c, num_to_string2
+    sbc hl, bc
+
+    ld (de), a
+    inc de
+num_to_string_ret:
+    nop // nop / ret
+    dec de
+    cp '0'
+    ret z
+    ld a, 201 // ret
+    ld (num_to_string_ret), a
+    inc de
+    ret
+
+
+/////////////////////////////////////
+///////  Create Render Batch  ///////
+/////////////////////////////////////
+
+sprite_num_to_proc_addr:
+    // input: A - sprite number
+    // out DE - proc addr
+    rrca
+    rrca
+    rrca
+    ld d, a
+    and 0b11100000
+    ld e, a
+    ld a, d
+    add a, a
+    add a, a
+    and 0b00011100
+    or 0b10000000
+    ld d, a
+    ret
+
+
+init_batch:
+    // input: D - left, E - top // camera pos in 8x8
+    //        BC - begin of batch
+
+    // next frame
+    ld a, (ibc_animation_frame + 1)
+    inc a
+    and 3
+    ld (ibc_animation_frame + 1), a
+
+    push de
+    ld a, 12
+init_batch_loop1:
+    push af
+    push de
+    srl d
+    srl e
+    call init_batch_raw
+    pop de
+    pop af
+    ld b, h
+    ld c, l
+    inc e
+    inc e
+    dec a
+    jp nz, init_batch_loop1
+
+    pop de
+
+    bit 0, d
+    jp nz, init_batch_fix_1x
+        bit 0, e
+        jp z, fix_batch_00
+        jp fix_batch_01
+init_batch_fix_1x:
+        bit 0, e
+        jp z, fix_batch_10
+        jp fix_batch_11
+
+setup_sfx:
+    ld a, (sound_bits)
+    ld b, a
+    xor a
+    ld (sound_bits), a
+    bit 5, b
+    jp nz, setup_sfx_explo0
+    bit 6, b
+    jp nz, setup_sfx_explo1
+    bit 7, b
+    jp nz, setup_sfx_explo2
+    bit 4, b
+    jp nz, setup_sfx_eat_crystal
+    bit 3, b
+    jp nz, setup_sfx_fallen
+    bit 1, b
+    jp nz, setup_sfx_push
+    bit 2, b
+    jp nz, setup_sfx_fall_in_progress
+    bit 0, b
+    jp nz, setup_sfx_eat
+    ret
+
+
+FIX_RAW_00:
+    .macro(row_count)
+        ld hl, just_return
+        ld (begin_of_buffers + 17 * 4 * {{row_count}} - 4), hl
+        ld (begin_of_buffers + 17 * 4 * {{row_count}} - 2), hl
+    .endm
+
+FIX_RAW_SND_1:
+    .macro(row_count)
+        ld hl, snd_1_return
+        ld (begin_of_buffers + 17 * 4 * {{row_count}} - 2), hl
+    .endm
+
+FIX_RAW_SND_0:
+    .macro(row_count)
+        ld hl, snd_0_return
+        ld (begin_of_buffers + 17 * 4 * {{row_count}} - 2), hl
+    .endm
+
+FIX_RAW_SND_CLICK:
+    .macro(row_count)
+        ld hl, snd_click_return
+        ld (begin_of_buffers + 17 * 4 * {{row_count}} - 2), hl
+    .endm
+
+FIX_RAW_NP_00:
+    .macro(row_count)
+        ld hl, next_screen_page
+        ld (begin_of_buffers + 17 * 4 * {{row_count}} - 4), hl
+        ld hl, just_return
+        ld (begin_of_buffers + 17 * 4 * {{row_count}} - 2), hl
+    .endm
+
+FIX_RAW_END_00:
+    .macro(row_count)
+        ld hl, end_of_render_field
+        ld (begin_of_buffers + 17 * 4 * {{row_count}} - 4), hl
+    .endm
+
+
+FIX_RAW_10:
+    .macro(row_count)
+        ld hl, just_return
+        ld (begin_of_buffers + 17 * 4 * ({{row_count}} - 1)), hl
+        ld (begin_of_buffers + 17 * 4 * {{row_count}} - 2), hl
+    .endm
+
+FIX_RAW_NP_10:
+    .macro(row_count)
+        ld hl, just_return
+        ld (begin_of_buffers + 17 * 4 * ({{row_count}} - 1)), hl
+        ld hl, next_screen_page
+        ld (begin_of_buffers + 17 * 4 * {{row_count}} - 2), hl
+    .endm
+
+FIX_RAW_END_10:
+    .macro(row_count)
+        ld hl, just_return
+        ld (begin_of_buffers + 17 * 4 * ({{row_count}} - 1)), hl
+        ld hl, end_of_render_field
+        ld (begin_of_buffers + 17 * 4 * {{row_count}} - 2), hl
+    .endm
+
+
+fix_batch_00:
+    FIX_RAW_00(1)
+    FIX_RAW_00(2)
+    FIX_RAW_00(3)
+    FIX_RAW_00(4)
+    FIX_RAW_00(5)
+    FIX_RAW_00(6)
+    FIX_RAW_00(7)
+    FIX_RAW_NP_00(8)
+    FIX_RAW_00(9)
+    FIX_RAW_00(10)
+    FIX_RAW_00(11)
+    FIX_RAW_00(12)
+    FIX_RAW_00(13)
+    FIX_RAW_00(14)
+    FIX_RAW_00(15)
+    FIX_RAW_NP_00(16)
+    FIX_RAW_00(17)
+    FIX_RAW_00(18)
+    FIX_RAW_00(19)
+    FIX_RAW_00(20)
+    FIX_RAW_00(21)
+    FIX_RAW_END_00(22)
+    jp setup_sfx // ret
+
+fix_batch_10:
+    FIX_RAW_10(1)
+    FIX_RAW_10(2)
+    FIX_RAW_10(3)
+    FIX_RAW_10(4)
+    FIX_RAW_10(5)
+    FIX_RAW_10(6)
+    FIX_RAW_10(7)
+    FIX_RAW_NP_10(8)
+    FIX_RAW_10(9)
+    FIX_RAW_10(10)
+    FIX_RAW_10(11)
+    FIX_RAW_10(12)
+    FIX_RAW_10(13)
+    FIX_RAW_10(14)
+    FIX_RAW_10(15)
+    FIX_RAW_NP_10(16)
+    FIX_RAW_10(17)
+    FIX_RAW_10(18)
+    FIX_RAW_10(19)
+    FIX_RAW_10(20)
+    FIX_RAW_10(21)
+    FIX_RAW_END_10(22)
+    jp setup_sfx // ret
+
+fix_batch_01:
+    call fix_batch_00
+    ld hl, add_sp_64
+    ld (begin_of_buffers), hl
+    FIX_RAW_00(8)
+    FIX_RAW_NP_00(9)
+    FIX_RAW_00(16)
+    FIX_RAW_NP_00(17)
+    FIX_RAW_00(22)
+    FIX_RAW_END_00(23)
+    ret
+
+fix_batch_11:
+    call fix_batch_10
+    ld hl, add_sp_64
+    ld (begin_of_buffers), hl
+    FIX_RAW_10(8)
+    FIX_RAW_NP_10(9)
+    FIX_RAW_10(16)
+    FIX_RAW_NP_10(17)
+    FIX_RAW_10(22)
+    FIX_RAW_END_10(23)
+    ret
+
+setup_sfx_explo0:
+    FIX_RAW_SND_1(1)
+    FIX_RAW_SND_0(3)
+    FIX_RAW_SND_1(6)
+    FIX_RAW_SND_0(13)
+    FIX_RAW_SND_1(19)
+    FIX_RAW_SND_0(21)
+    ret
+setup_sfx_explo1:
+    FIX_RAW_SND_1(1)
+    FIX_RAW_SND_0(3)
+    FIX_RAW_SND_1(4)
+    FIX_RAW_SND_0(10)
+    FIX_RAW_SND_1(14)
+    FIX_RAW_SND_0(18)
+    ret
+setup_sfx_explo2:
+    FIX_RAW_SND_CLICK(5)
+    FIX_RAW_SND_CLICK(7)
+    FIX_RAW_SND_CLICK(10)
+    FIX_RAW_SND_CLICK(12)
+    FIX_RAW_SND_CLICK(15)
+    FIX_RAW_SND_CLICK(18)
+    ret
+setup_sfx_eat_crystal:
+    FIX_RAW_SND_1(1)
+    FIX_RAW_SND_0(2)
+    FIX_RAW_SND_1(3)
+    FIX_RAW_SND_0(4)
+    FIX_RAW_SND_CLICK(5)
+    FIX_RAW_SND_CLICK(7)
+    FIX_RAW_SND_CLICK(10)
+    FIX_RAW_SND_CLICK(12)
+    FIX_RAW_SND_CLICK(15)
+    FIX_RAW_SND_CLICK(18)
+    ret
+setup_sfx_fallen:
+    FIX_RAW_SND_1(1)  
+    FIX_RAW_SND_0(2)
+    FIX_RAW_SND_1(4)
+    FIX_RAW_SND_0(7)
+    FIX_RAW_SND_1(11)
+    FIX_RAW_SND_0(21)
+    ret
+setup_sfx_push:
+    FIX_RAW_SND_1(1)
+    FIX_RAW_SND_0(14)
+    ret
+setup_sfx_fall_in_progress:
+    FIX_RAW_SND_CLICK(1)
+    ret
+setup_sfx_eat:
+    FIX_RAW_SND_CLICK(1)
+    FIX_RAW_SND_CLICK(3)
+    FIX_RAW_SND_CLICK(4)
+    FIX_RAW_SND_CLICK(10)
+    FIX_RAW_SND_CLICK(14)
+    ret
+
+
+init_batch_raw:
+    // input: D - x, E - y
+    //        BC - output stack raw
+    // out:   HL - new stack raw
+    push bc
+    push bc
+    ld h, 0
+    ld l, e
+    add hl, hl
+    add hl, hl
+    add hl, hl
+    add hl, hl
+    add hl, hl
+    ld b, 0
+    ld c, d
+    add hl, bc
+    add hl, hl
+    ld de, level_data
+    add hl, de // hl - pointer to level row
+    pop ix
+    
+    ld b, 17 // 17 sprites per row
+    
+
+init_batch_cell:    
+    ld a, (hl)    
+    ld c, a
+    add a, a
+    add a, a
+ibc_animation_frame:
+    add a, 1
+    add a, a
+    ex de, hl
+    ld (ibc_a + 1), a
+ibc_a:
+    ld hl, (sprite_remap_address) // aligned on 256
+    ex de, hl
+
+    bit 6, c
+    jp z, ibc_no_offset
+
+    inc l
+    ld a, (hl)
+
+    or a
+    jr z, ibc_offset_0
+    dec a
+    jr z, ibc_offset_1
+    dec a
+    jr z, ibc_offset_2
+
+ibc_offset_3:
+    inc d
+    ld (ix + 0), e
+    ld (ix + 1), d
+    ld (ix + 2), just_black_attr % 256
+    ld (ix + 3), just_black_attr / 256
+    inc d
+    inc d
+    ld (ix + 0 + 17 * 2 * 2), e
+    ld (ix + 1 + 17 * 2 * 2), d
+    ld (ix + 2 + 17 * 2 * 2), just_black_attr % 256
+    ld (ix + 3 + 17 * 2 * 2), just_black_attr / 256 
+    jp ibc_continue
+
+ibc_offset_0:
+    inc d
+    inc d
+    ld (ix + 0), e
+    ld (ix + 1), d
+    inc d
+    ld (ix + 2), e
+    ld (ix + 3), d
+    ld (ix + 0 + 17 * 2 * 2), just_black_attr % 256
+    ld (ix + 1 + 17 * 2 * 2), just_black_attr / 256
+    ld (ix + 2 + 17 * 2 * 2), just_black_attr % 256
+    ld (ix + 3 + 17 * 2 * 2), just_black_attr / 256
+
+    jp ibc_continue
+
+ibc_offset_1:
+    ld (ix + 0), just_black_attr % 256
+    ld (ix + 1), just_black_attr / 256
+    ld (ix + 2), just_black_attr % 256
+    ld (ix + 3), just_black_attr / 256
+    ld (ix + 0 + 17 * 2 * 2), e
+    ld (ix + 1 + 17 * 2 * 2), d
+    inc d
+    ld (ix + 2 + 17 * 2 * 2), e
+    ld (ix + 3 + 17 * 2 * 2), d
+
+    jp ibc_continue
+
+ibc_offset_2:
+    ld (ix + 0), just_black_attr % 256
+    ld (ix + 1), just_black_attr / 256
+    ld (ix + 2), e
+    ld (ix + 3), d
+    ld (ix + 0 + 17 * 2 * 2), just_black_attr % 256
+    ld (ix + 1 + 17 * 2 * 2), just_black_attr / 256
+    inc d
+    inc d
+    ld (ix + 2 + 17 * 2 * 2), e
+    ld (ix + 3 + 17 * 2 * 2), d
+
+    jp ibc_continue
+
+ibc_no_offset:
+    inc l
+
+    ld (ix + 0), e
+    ld (ix + 1), d
+    inc d
+    ld (ix + 2), e
+    ld (ix + 3), d
+    inc d
+    ld (ix + 0 + 17 * 2 * 2), e
+    ld (ix + 1 + 17 * 2 * 2), d
+    inc d
+    ld (ix + 2 + 17 * 2 * 2), e
+    ld (ix + 3 + 17 * 2 * 2), d
+
+ibc_continue:
+    ld de, 4
+    add ix, de
+    inc hl
+    dec b
+    jp nz, init_batch_cell
+
+    pop bc
+    ld hl, 17 * 4 * 2
+    add hl, bc
+    ret 
+
+
+render_player_to_batch:
+    ld hl, (camera_pos_y)  // H - camera x, L - camera y
+    res 0, h
+    res 0, l
+
+    ex de, hl
+    ld hl, (player_y)
+
+    ld a, h
+    sub a, d
+    ld d, a
+    ld a, l
+    sub a, e
+    ld e, a
+    ld h, 0
+    ld l, e
+
+
+    ld b, h
+    ld c, l
+    add hl, hl
+    add hl, hl
+    add hl, hl
+    add hl, hl
+    add hl, bc
+    add hl, hl
+    ld b, 0
+    ld c, d
+    add hl, bc
+    add hl, hl
+
+    ld bc, begin_of_buffers
+    add hl, bc
+    push hl
+    pop ix
+    // IX - addr in batch
+
+    ld a, 31
+    add a, a
+    add a, a
+    ld hl, ibc_animation_frame + 1
+    add a, (hl)
+    add a, a
+    ld (pl_a + 1), a
+pl_a:
+    ld hl, (sprite_remap_address) // aligned on 256
+    // hl - sprite addr
+
+
+pl_head:
+    ld de, 32768 + 32 * 228
+    
+    ld (ix + 0), e
+    ld (ix + 1), d
+    inc d
+    ld (ix + 2), e
+    ld (ix + 3), d
+
+    ex de, hl
+    inc d
+    inc d
+    ld (ix + 0 + 17 * 2 * 2), e
+    ld (ix + 1 + 17 * 2 * 2), d
+    inc d
+    ld (ix + 2 + 17 * 2 * 2), e
+    ld (ix + 3 + 17 * 2 * 2), d
+    ret
+
+
+next_screen_page:
+    ld a, 8
+    add a, e
+    ld e, a
+    ld h, a
+    inc d
+    ld l, 0
+just_return:
+    ret
+snd_1_return:
+    ld a, 0b00010000
+    out (0xFE), a
+    ret
+snd_click_return:
+    ld a, 0b00010000
+    out (0xFE), a
+    bit 0, (iy + 0) // delay
+    bit 0, (iy + 0) // delay
+    bit 0, (iy + 0) // delay
+    bit 0, (iy + 0) // delay
+snd_0_return:
+    xor a
+    out (0xFE), a
+    ret
+
+
+just_black_attr:
+    ld h, d
+    ld (hl), 0
+    ld h, e
+    inc l
+    ret
+
+
+add_sp_64:
+    ld (saved_hl), hl
+    ld hl, 64
+    add hl, sp
+    ld sp, hl
+    ld hl, (saved_hl)
+    ret
+saved_hl:
+    .dw 0
+
+clear_screen:
+    ld hl, 16384
+    ld de, 16384 + 1
+    ld bc, 256 * 8 * 3 + 767
+    ld (hl), 0
+    ldir
+    ld a, 0
+    out (254), a
+    ret
+
+clear_attributes:
+    ld hl, 16384 + 256 * 8 * 3
+    ld de, 16384 + 256 * 8 * 3 + 1
+    ld bc, 767
+    ld (hl), 0
+    ldir
+    ld a, 0
+    out (254), a
+    ret
+
+fade_out:
+    ld b, 12
+fade_out_loop:
+    push bc
+    ld hl, 16384 + 256 * 8 * 3
+    ld bc, 768
+
+    halt
+
+fade_out_cell:
+    ld a, 0b111
+    and (hl)
+    jp z, fade_out_ink_already_null
+    dec (hl)
+
+fade_out_ink_already_null:
+    ld a, 0b111000
+    and (hl)
+    jp z, fade_out_paper_already_null
+    ld a, -8
+    add a, (hl)
+    ld (hl), a
+
+fade_out_paper_already_null:
+    inc hl
+    dec bc
+    ld a, b
+    or c
+    jp nz, fade_out_cell
+
+    pop bc
+    djnz fade_out_loop
+    ret
+
+fade_to_white:
+    halt
+
+    ld hl, 16384 + 256 * 8 * 3
+    ld bc, 768
+set_brightness_loop:
+    set 6, (hl)
+    inc hl
+    dec bc
+    ld a, b
+    or c
+    jp nz, set_brightness_loop
+    ld e, 0
+    ld b, 8
+
+fade_white_loop:
+    push bc
+    ld hl, 16384 + 256 * 8 * 3
+    ld bc, 768
+
+    halt
+
+fade_white_cell:
+    ld a, (hl)
+    or e
+    ld (hl), a
+
+    inc hl
+    dec bc
+    ld a, b
+    or c
+    jp nz, fade_white_cell
+
+    ld a, 0b1001
+    add a, e
+    ld e, a
+
+    pop bc
+    djnz fade_white_loop
+
+
+    ld d, 0b111111
+    ld e, 8
+wset_attr:
+    halt
+    ld hl, 16384 + 256 * 8 * 3
+    ld bc, 768
+wset_attr_loop:
+    ld (hl), d
+    inc hl
+    dec bc
+    ld a, b
+    or c
+    jp nz, wset_attr_loop
+
+    ld a, d
+    sub 0b1001
+    ld d, a
+
+    dec e
+    jp nz, wset_attr
+
+    halt
+    halt
+    ret
+
+
+sfx_next_exit_level:
+    ex af, af'
+    ld a, 0b00010001
+    ex af, af'
+    ld a, 1
+sfx_next_exit_one_beep:
+    halt
+    ld b, 44
+
+sfx_next_exit_one_beep_internal:
+    ex af, af'
+    out (0xFE), a
+    xor 0b00010001
+    ex af, af'
+
+    ld d, a
+
+sfx_next_exit_delay:
+        dec d
+        ld e, (ix + 0)
+        ld e, (ix + 0)
+        ld e, (ix + 0)
+        jp nz, sfx_next_exit_delay
+
+    dec b
+    jp nz, sfx_next_exit_one_beep_internal
+
+    inc a
+    cp 20
+    jp nz, sfx_next_exit_one_beep
+
+    xor a
+    out (0xFE), a
+    ret
+
+
+go_to_info_screen:
+    call fade_out
+    call render_background_red_dots
+
+    call copy_title_to_screen
+
+    ld de, 23 * 256 + 17
+    ld a, 63
+    call render_single_sprite
+
+    ld de, 24 * 256 + 12
+    ld a, 63
+    call render_single_sprite
+
+    ld de, 25 * 256 + 14
+    ld a, 38
+    call render_single_sprite
+
+    ld de, 29 * 256 + 12
+    ld a, 4
+    call render_single_sprite
+
+    ld de, 28 * 256 + 16
+    ld a, 5
+    call render_single_sprite
+
+    ld de, 8 * 256 + 3
+    ld a, 2
+    ld bc, str_by_imp5
+    call render_text_xy
+
+    ld de, 0 * 256 + 7
+    ld a, 7 + 64
+    ld bc, str_controls
+    call render_text_xy
+
+    ld de, 2 * 256 + 9
+    ld a, 6 + 64
+    ld bc, str_controls_2
+    call render_text_xy
+
+    ld de, 0 * 256 + 13
+    ld a, 7 + 64
+    ld bc, str_additional_keys
+    call render_text_xy
+
+    ld de, 2 * 256 + 15
+    ld a, 4 + 64
+    ld bc, str_key_x
+    call render_text_xy
+
+    ld de, 2 * 256 + 17
+    ld a, 4 + 64
+    ld bc, str_key_r
+    call render_text_xy
+
+    ld de, 4 * 256 + 23
+    ld a, 5 + 64
+    ld bc, str_press_fire
+    call render_text_xy
+
+    ld b, 25
+wait_half_sec_1:
+    halt
+    djnz wait_half_sec_1
+
+wait_key_press:
+    ld a, (input_mask)
+    and 1
+    jp nz, wait_key_press
+    call fade_to_white
+    call fade_out
+    jp go_to_main_map
+
+
+str_by_imp5:
+    .defn "BY ALEXEY BORISOV /IMP5/"
+str_controls:
+    .defn "CONTROLS:"
+str_controls_2:
+    .defn "KEMPSTON, SINCLAIR, QAOP+M"
+str_additional_keys:
+    .defn "ADDITIONAL KEYS:"
+str_key_x:
+    .defn "X - QUIT CAVE"
+str_key_r:
+    .defn "R - RESTART CAVE"
+str_press_fire:
+    .defn "PRESS \x22FIRE\x22 TO CONTINUE"
+
+update_info_screen:
+    jp update_info_screen
+
+
+update_main_map:
+    xor a
+    ld (meta_ignore_input), a
+    ld a, (meta_select_x)
+    ld hl, meta_cave_progress_0
+    add a, l
+    ld l, a
+    ld a, (hl)
+    ld (meta_select_y), a
+
+wait_until_key_up:
+    call update_input_mask
+    ld a, (input_mask)
+    cpl
+    and 0b11111
+    jp nz, wait_until_key_up
+
+
+update_main_map_loop:
+    halt
+    halt
+    halt
+    halt
+
+    call update_input_mask
+
+    ld a, (meta_ignore_input)
+    or a
+    jp z, um_ok_0
+
+    dec a
+    ld (meta_ignore_input), a
+    ld a, c
+um_prev_input:
+    cp 0
+    jp z, um_6
+
+um_ok_0:
+    xor a
+    ld (meta_ignore_input), a
+
+    ld a, c
+    ld (um_prev_input + 1), a
+
+    bit 0, c
+    jp nz, um_1
+    call restore_map_background
+    // start level
+    call sfx_next_exit_level
+    call fade_out
+    call load_level
+    //pop hl // ret
+    jp gameplay_loop
+
+
+um_1:
+    bit 5, c
+    jp z, go_to_info_screen
+
+    bit 4, c
+    jp nz, um_2
+    // left
+    call restore_map_background
+    ld a, (meta_select_x)
+    or a
+    jp z, um_2
+    dec a
+    ld (meta_select_x), a
+    ld a, 2
+    ld (meta_ignore_input), a
+    jp um_6
+um_2:
+    bit 3, c
+    jp nz, um_3
+    // right
+    call restore_map_background
+    ld a, (meta_select_x)
+    inc a
+    cp 4
+    jp nc, um_3
+    ld (meta_select_x), a
+    ld a, 2
+    ld (meta_ignore_input), a
+    jp um_6
+um_3:
+    bit 2, c
+    jp nz, um_4
+    // down
+    call restore_map_background
+    ld a, (meta_select_y)
+    inc a
+    ld (meta_select_y), a
+    ld a, 2
+    ld (meta_ignore_input), a
+    jp um_6
+um_4:
+    bit 1, c
+    jp nz, um_5
+    // up
+    call restore_map_background
+    ld a, (meta_select_y)
+    or a
+    jp z, um_5
+    dec a
+    ld (meta_select_y), a
+    ld a, 2
+    ld (meta_ignore_input), a
+    jp um_6
+um_5:
+
+um_6:
+    ld a, (meta_select_x)
+    ld hl, meta_cave_progress_0
+    add a, l
+    ld l, a
+    ld a, (meta_select_y)
+    cp (hl)
+    jp c, um_ok_1
+    ld a, (hl)
+    ld (meta_select_y), a
+um_ok_1:
+    cp 4
+    jp c, um_ok_2
+    ld a, 4
+    ld (meta_select_y), a
+um_ok_2:
+
+    ld a, (upd_map_anim_idx + 1)
+    inc a
+    and 3
+    ld (upd_map_anim_idx + 1), a
+
+    ld a, (meta_select_x)
+    ld e, a
+    add a, a
+    add a, e
+    add a, a
+    add a, 6
+    ld d, a
+    ld e, 8
+upd_map_anim_idx:
+    ld a, 0
+    push de
+
+    call render_single_sprite
+    pop de
+    push de
+
+    ld a, 60
+    call render_single_half_sprite
+
+    pop de
+    dec d
+    ld a, (meta_select_y)
+    cp 4
+    push af
+    call c, draw_small_selection
+    pop af
+    call nc, draw_big_selection
+
+    jp update_main_map_loop
+
+
+draw_small_selection:
+    add a, a
+    add a, 4
+    add a, e
+    ld e, a
+
+    ld a, (upd_map_anim_idx + 1)
+    add a, a
+    add a, a
+    add a, a
+    add a, a
+    or 64 + 8
+    ld iyl, a
+
+    push de
+    ld bc, str_frame_top_left
+    call render_text_xy
+    pop de
+
+    inc d
+    inc d
+    inc d
+    push de
+    ld bc, str_frame_top_right
+    ld a, iyl
+    call render_text_xy
+    pop de
+
+    inc e
+    push de
+    ld bc, str_frame_bottom_right
+    ld a, iyl
+    call render_text_xy
+    pop de
+
+    dec d
+    dec d
+    dec d
+    ld bc, str_frame_bottom_left
+    ld a, iyl
+    call render_text_xy
+    
+    ret
+
+
+draw_big_selection:
+    ld e, 21
+    dec d
+
+    ld a, (upd_map_anim_idx + 1)
+    add a, a
+    add a, a
+    add a, a
+    add a, a
+    or 64 + 8
+    ld iyl, a
+
+    push de
+    ld bc, str_frame_top_left
+    call render_text_xy
+    pop de
+
+    ld a, d
+    add a, 5
+    ld d, a
+    push de
+    ld bc, str_frame_top_right
+    ld a, iyl
+    call render_text_xy
+    pop de
+
+    inc e
+    push de
+    ld bc, str_frame_bottom_right
+    ld a, iyl
+    call render_text_xy
+    pop de
+
+    ld a, d
+    sub a, 5
+    ld d, a
+    ld bc, str_frame_bottom_left
+    ld a, iyl
+    call render_text_xy
+    
+    ret
+
+
+restore_map_background: 
+    push af
+    push bc
+
+    call snd_click_return
+
+    ld a, (meta_select_x)
+    ld e, a
+    add a, a
+    add a, e
+    add a, a
+    add a, 6
+    ld d, a
+    ld e, 8
+
+    ld a, 63
+    push de
+    call render_single_sprite
+    pop de
+
+    ld a, (meta_select_y)
+
+    cp 4
+    jp c, um_clear_small
+um_clear_big:
+    dec d
+    dec d
+    ld e, 21
+    call get_attr_address
+    ld (hl), 0
+    inc e
+    call get_attr_address
+    ld (hl), 0
+    ld a, 5
+    add a, d
+    ld d, a
+    call get_attr_address
+    ld (hl), 0
+    dec e
+    call get_attr_address
+    ld (hl), 0
+
+    pop bc
+    pop af
+    ret
+
+
+um_clear_small:
+    add a, 2
+    add a, a
+    add a, e
+    ld e, a
+    push de
+    dec d
+    dec d
+
+    ld a, 55
+    call render_single_sprite
+
+    pop de
+    inc d
+    inc d
+
+    ld a, 55
+    call render_single_sprite
+
+    pop bc
+    pop af
+    ret
+
+
+render_main_map:
+    call clear_attributes
+    call reset_gameplay_variables
+
+    xor a
+    ld (is_player_controllable), a
+
+    ld hl, sprite_remap_index_for_main_menu
+    call init_sprite_remap
+
+    ld hl, level_data
+    ld de, level_data + 1
+    ld bc, F_WIDTH * 2 * 6
+    ld (hl), 0
+    ldir
+    ld bc, F_WIDTH * 2 * 1
+    ld (hl), 5
+    ldir
+    ld bc, F_WIDTH * 2 * 8
+    ld (hl), 4
+    ldir
+    
+    ld hl, level_data + F_WIDTH * 2 * 6 + 4 * 2
+    ld (hl), 6
+    ld hl, level_data + F_WIDTH * 2 * 6 + 7 * 2
+    ld (hl), 6
+    ld hl, level_data + F_WIDTH * 2 * 6 + 10 * 2
+    ld (hl), 6
+    ld hl, level_data + F_WIDTH * 2 * 6 + 13 * 2
+    ld (hl), 6
+
+    ld hl, 0x0202
+    ld (camera_pos_y), hl
+
+    ld hl, 0x080A
+    ld a, (meta_select_x)
+    ld c, a
+    add a, a
+    add a, c
+    add a, a
+    add a, h
+    ld h, a
+    ld (player_y), hl
+
+    call render_loop
+
+    ld d, 7
+    ld e, 0
+    ld bc, str_select_cave
+    ld a, 7
+    call render_text_xy
+    
+    ld d, 10
+    ld e, 4
+    ld bc, str_fire_start
+    ld a, 7
+    call render_text_xy
+
+    ld d, 8
+    ld e, 2
+    ld bc, str_i_information
+    ld a, 7
+    call render_text_xy
+
+    ld a, (meta_cave_progress_0)
+    ld d, 6
+    ld iyh, 36
+    ld iyl, 7 + 2 * 8 + 64
+    call render_cave_chain
+
+    ld a, (meta_cave_progress_1)
+    ld d, 12
+    ld iyh, 40
+    ld iyl, 7 + 64
+    call render_cave_chain
+
+    ld a, (meta_cave_progress_2)
+    ld d, 18
+    ld iyh, 44
+    ld iyl, 7 + 1 * 8 + 64
+    call render_cave_chain
+
+    ld a, (meta_cave_progress_3)
+    ld d, 24
+    ld iyh, 48
+    ld iyl, 7 + 64
+    call render_cave_chain
+
+    ret
+
+render_cave_chain:
+    // input A - progress
+    // iyh - artifact sprite index
+    // iyl - artifact attr
+    // D - x
+
+    add a, 128
+    ld ixl, a
+
+    ld b, 4
+    ld e, 12
+rty1:
+    ld a, ixl
+    cp 128
+    jp z, r_chain_z
+    jp c, r_chain_c
+    ld a, 54
+    jp r_chain_skip
+r_chain_c:
+    ld a, 53
+    jp r_chain_skip
+r_chain_z:
+    ld a, 52
+    jp r_chain_skip
+r_chain_skip:
+    dec ixl
+
+    push af
+    push bc
+    push de
+    call render_single_sprite
+    pop de
+    pop bc
+    pop af
+
+    inc e
+    inc e
+    djnz rty1
+    
+    inc ixl
+    dec d
+
+    // color of frame
+    ld a, iyl
+    dec ixl
+    ld b, ixl
+    bit 7, b
+    jp nz, skip_set_red
+    ld a, 2
+
+skip_set_red:
+    push bc // B
+
+    ld bc, str_frame_top
+    push af
+    push de
+    call render_text_xy
+    pop de
+    pop af
+
+    inc e
+    push de // A
+    ld bc, str_frame_mid
+    push af
+    push de
+    call render_text_xy
+    pop de
+    pop af
+
+    inc e
+    ld bc, str_frame_mid
+    push af
+    push de
+    call render_text_xy
+    pop de
+    pop af
+
+    inc e
+    ld bc, str_frame_bottom
+    push af
+    push de
+    call render_text_xy
+    pop de
+    pop af
+    
+    pop de // A
+    pop bc // B 
+
+    dec b
+    bit 7, b
+    ret z
+
+    ld a, iyh
+    inc d
+    call render_single_sprite
+
+    ret
+
+
+str_frame_top_left:
+    .defn "#"
+str_frame_top_right:
+    .defn "&"
+str_frame_bottom_right:
+    .defn "]"
+str_frame_bottom_left:
+    .defn "["
+str_frame_top:
+    .defn "#$$&"
+str_frame_mid:
+    .defn "(  )"
+str_frame_bottom:
+    .defn "[\\\\]"
+str_select_cave:
+    .defn "<;^> - SELECT CAVE"
+str_enter_password:
+    .defn "C - ENTER PASSWORD"
+str_fire_start:
+    .defn "FIRE - START"
+str_i_information:
+    .defn "I - INFORMATION"
+str_2_spaces:
+    .defn "  "
+
+
+render_single_sprite: // (slow)
+    // input: A - sprite num
+    // D - x, E - y
+
+    ld c, a
+    push de
+    call sprite_num_to_proc_addr
+    ex de, hl
+    ld (rss_sprite_addr_1 + 1), hl
+    inc h
+    ld (rss_sprite_addr_2 + 1), hl
+    inc h
+    ld (rss_sprite_addr_3 + 1), hl
+    inc h
+    ld (rss_sprite_addr_4 + 1), hl
+
+    pop de
+    push de
+
+    call get_bits_address
+    ld b, h
+    ld c, l
+    pop de
+    push de
+    call get_attr_address
+
+    ld d, h  //attribute_start / 256
+    ld e, b  //bits_start / 256
+    ld h, e
+
+rss_sprite_addr_1:
+    call 0
+rss_sprite_addr_2:
+    call 0
+
+    pop de
+    inc e
+    push de
+    call get_bits_address
+    ld b, h
+    ld c, l
+    pop de
+    call get_attr_address
+    ld d, h  //attribute_start / 256
+    ld e, b  //bits_start / 256
+    ld h, e
+
+rss_sprite_addr_3:
+    call 0
+rss_sprite_addr_4:
+    call 0
+    ret
+
+render_single_half_sprite: // (slow)
+    // input: A - sprite num
+    // D - x, E - y
+
+    ld c, a
+    push de
+    call sprite_num_to_proc_addr
+    ex de, hl
+    ld (rss_half_sprite_addr_1 + 1), hl
+    inc h
+    ld (rss_half_sprite_addr_2 + 1), hl
+
+    pop de
+    push de
+
+    call get_bits_address
+    ld b, h
+    ld c, l
+    pop de
+    call get_attr_address
+
+    ld d, h  //attribute_start / 256
+    ld e, b  //bits_start / 256
+    ld h, e
+
+rss_half_sprite_addr_1:
+    call 0
+rss_half_sprite_addr_2:
+    call 0
+    ret
+
+
+reset_gameplay_variables:
+    ld hl, 0x0202
+    ld (player_y), hl
+    ld (next_player_y), hl
+    ld (im_last_player_attr + 1), hl
+
+    ld hl, level_data + 68
+    ld (player_addr), hl
+    ld (next_player_addr), hl
+    xor a
+    ld (need_restart_level), a
+    ld (moved_on_prev_control), a
+    ld (saved_controls), a
+    ld (is_artifact_collected), a
+    ld (player_can_move_mask), a
+    ld (need_go_to_next_level), a
+    ld (need_go_to_main_map), a
+    ld (sound_bits), a
+    dec a // = 255
+    ld (input_mask), a
+
+    ld a, 1
+    ld (is_player_controllable), a
+    ld a, 68
+    ld (ticks_to_autorestart), a
+    ld a, 201 // ret
+    ld (blink_go_to_exit), a // stop blink
+
+    ret
+
+init_sprite_remap:
+    // input: HL - start of sprite remap index
+    ld ix, sprite_remap_address
+    ld b, 32 * 4
+sprite_remap_loop:
+    ld a, (hl)
+    call sprite_num_to_proc_addr
+    ld (ix + 0), e
+    ld (ix + 1), d
+    inc ixl
+    inc ix
+    inc hl
+    djnz sprite_remap_loop
+    ret
+
+init_sprite_remap_alter_sprite:
+    // input: A - sptire bank offset (0, 4, 8, 12)
+
+    ld c, a
+    add a, 37
+    call sprite_num_to_proc_addr
+    ex de, hl
+    ld (sprite_remap_address + 1 * 8), hl
+    ld (sprite_remap_address + 1 * 8 + 2), hl
+    ld (sprite_remap_address + 1 * 8 + 4), hl
+    ld (sprite_remap_address + 1 * 8 + 6), hl
+
+    ld a, c
+    add a, 39
+    call sprite_num_to_proc_addr
+    ex de, hl
+    ld (sprite_remap_address + 3 * 8), hl
+    ld (sprite_remap_address + 3 * 8 + 2), hl
+    ld (sprite_remap_address + 3 * 8 + 4), hl
+    ld (sprite_remap_address + 3 * 8 + 6), hl
+
+    ld a, c
+    add a, 36
+    call sprite_num_to_proc_addr
+    ex de, hl
+    ld (sprite_remap_address + 8 * 8), hl
+    ld (sprite_remap_address + 8 * 8 + 2), hl
+    ld (sprite_remap_address + 8 * 8 + 4), hl
+    ld (sprite_remap_address + 8 * 8 + 6), hl
+
+    ld a, c
+    add a, 38
+    call sprite_num_to_proc_addr
+    ex de, hl
+    ld (sprite_remap_address + 10 * 8), hl
+    ld (sprite_remap_address + 10 * 8 + 2), hl
+    ld (sprite_remap_address + 10 * 8 + 4), hl
+    ld (sprite_remap_address + 10 * 8 + 6), hl
+
+    ret
+
+
+load_level:
+    ld hl, (meta_select_x)
+    ld a, l // x
+    ld b, a
+    add a, a
+    add a, a
+    add a, b // a = x * 5
+    add a, h // + y
+    add a, a
+    ld b, 0
+    ld c, a
+    ld hl, level_addr_table
+    add hl, bc
+load_level_by_hl:
+    ld (load_level_addr_cmd + 1), hl
+
+    // init sprite remap
+    ld hl, sprite_remap_index
+    call init_sprite_remap
+
+load_level_addr_cmd:
+    ld hl, (0)
+    ld a, (hl)
+    push hl
+    call init_sprite_remap_alter_sprite
+    pop hl
+    inc hl
+    ld a, (hl)
+    ld (crystals_left), a
+    inc hl
+    ld de, level_data
+
+    ld bc, F_WIDTH * F_HEIGHT
+unpack_next:
+    ld a, (hl)
+unpack_sequence:
+    push af
+    and 31
+    ld (de), a
+    inc de
+    xor a
+    ld (de), a
+    inc de
+    dec bc
+    pop af
+    sub 32
+    jp nc, unpack_sequence
+    
+    inc hl
+    bit 7, b
+    jp z, unpack_next
+
+    // set stop-processing-block
+    ld hl, level_data + F_WIDTH * 2 - 2
+    ld a, (hl)
+    ld (hl), 0b00100010
+
+    // set defaults
+    call reset_gameplay_variables
+
+    // find player position on map
+    ld hl, level_data
+    ld e, 0 // y
+    ld c, F_HEIGHT
+find_player_raw:
+    ld d, 0 // x
+    ld b, F_WIDTH
+find_player_cell:
+    ld a, (hl)
+
+    cp 24
+    jp nz, skip_found_player_pos
+        ld (player_addr), hl
+        ld (next_player_addr), hl
+        ex de, hl
+        ld (player_y), hl
+        ld (next_player_y), hl
+        jp exit_find_player_loop
+skip_found_player_pos:
+    inc d
+    inc d
+    inc l
+    inc hl
+    djnz find_player_cell
+    inc e
+    inc e
+    dec c
+    jp nz, find_player_raw
+exit_find_player_loop:
+    call center_camera_on_player
+
+    // print 'crystals left'
+    ld d, 0
+    ld e, 23
+    ld bc, str_crystals
+    ld a, 7
+    call render_text_xy
+    ld a, (crystals_left)
+    ld hl, str_buf_8
+    call num_to_string_255
+    ld (hl), 0
+    ld d, 10
+    ld e, 23
+    ld bc, str_buf_8
+    ld a, 7 + 64
+    call render_text_xy
+
+    ret
+    
+
+center_camera_on_player:
+    ld hl, (player_y) // H - player_x,  L - player_y
+    ld a, h
+    sub 16
+    ld h, a
+    ld a, l
+    sub 11
+    ld l, a
+    ld (camera_pos_y), hl
+    call clip_camera
+    ret
+
+move_camera_to_player:
+    ld hl, (camera_pos_y)
+    ld de, 16 * 256 + 11
+    add hl, de
+    ex de, hl
+    ld hl, (player_y) // H - player_x,  L - player_y    
+    ld a, h
+    sub d
+    jp nc, mvc_1
+    dec d
+    jp mvc_2
+mvc_1:
+    jp z, mvc_2
+    inc d
+mvc_2:
+    ld a, l
+    sub e
+    jp nc, mvc_3
+    dec e
+    jp mvc_4
+mvc_3:
+    jp z, mvc_4
+    inc e
+mvc_4:
+    ex de, hl
+    ld de, -16 * 256 - 11
+    add hl, de
+    ld (camera_pos_y), hl
+    call clip_camera
+    ret
+
+
+clip_camera:
+    ld hl, (camera_pos_y) // H - x, L - y
+    ld a, h
+    add a, 100
+    cp 101 + 1
+    jp nc, clip_camera_1
+    ld h, 1
+clip_camera_1:
+    cp 100 + F_WIDTH * 2 - 32 - 1
+    jp c, clip_camera_2
+    ld h, F_WIDTH * 2 - 32 - 1
+clip_camera_2:
+    ld a, l
+    add a, 100
+    cp 101 + 1
+    jp nc, clip_camera_3
+    ld l, 1
+clip_camera_3:
+    cp 100 + F_HEIGHT * 2 - 22 - 1
+    jp c, clip_camera_4
+    ld l, F_HEIGHT * 2 - 22 - 1
+clip_camera_4:
+    ld (camera_pos_y), hl
+    ret
+
+
+on_crystal_collected:
+    push af
+    push bc
+    push de
+    push hl
+    push ix
+
+    ld a, (crystals_left)
+    or a
+    jp z, exit_on_crystal_collect
+
+    dec a
+    ld (crystals_left), a
+    jp nz, show_number_of_crystals
+
+    ld d, 0
+    ld e, 23
+    ld bc, str_go_to_exit
+    ld a, 7 + 64
+    call render_text_xy
+
+    call open_exit_on_level
+
+    ld a, 0
+    ld (blink_go_to_exit), a // begin blink
+
+    jp exit_on_crystal_collect
+
+show_number_of_crystals:
+    ld hl, str_buf_8
+    call num_to_string_255
+    ld (hl), ' '
+    inc hl
+    ld (hl), 0
+
+    ld d, 10
+    ld e, 23
+    ld bc, str_buf_8
+    ld a, 7 + 64
+    call render_text_xy
+
+exit_on_crystal_collect:
+    pop ix
+    pop hl
+    pop de
+    pop bc
+    pop af
+    ret
+
+on_artifact_collected:
+    push af
+    push bc
+    push de
+    push hl
+    push ix
+
+    ld d, 18
+    ld e, 23
+    ld bc, str_artifact_found
+    ld a, 7
+    call render_text_xy
+
+    ld a, 1
+    ld (is_artifact_collected), a
+
+    pop ix
+    pop hl
+    pop de
+    pop bc
+    pop af
+    ret
+
+open_exit_on_level:
+    ld hl, level_data
+    ld bc, F_WIDTH * F_HEIGHT
+open_exit_loop:
+    ld a, (hl)
+    cp 6
+    jp nz, open_exit_continue_loop
+    ld (hl), 23
+open_exit_continue_loop:
+    inc hl
+    inc hl
+    dec bc
+    ld a, b
+    or c
+    jp nz, open_exit_loop
+    ret
+
+
+CONSUME:
+    .macro(offset)
+        ld a, (ix + {{offset}})
+        cp 9
+        jp nz, skip_consume_crystal
+        call on_crystal_collected
+        ld hl, sound_bits
+        set 4, (hl)
+        jp consume_clear_cell
+    skip_consume_crystal:
+        cp 8
+        jp nz, skip_consume_artifact
+        call on_artifact_collected
+        ld hl, sound_bits
+        set 4, (hl)
+        jp consume_clear_cell
+    skip_consume_artifact:
+        cp 1
+        jp nz, skip_consume
+    consume_clear_cell:
+        ld hl, sound_bits
+        set 0, (hl)
+        ld (ix + {{offset}}), 0
+    skip_consume:
+    .endm
+
+
+update_input_mask:
+    // return: C - input mask
+    ld a, (input_mask)
+    ld hl, prev_input_mask
+    and (hl)
+    ld b, a
+    ld a, (hl)
+    cpl
+    ld hl, latest_input_mask
+    and (hl)
+    or b
+    ld c, a
+    ld (prev_input_mask), a
+    ld a, 1
+    ld (need_reset_input), a
+    ret
+
+
+test_player_can_move:
+    ld e, 0
+    ld ix, (player_addr)
+    
+    ld a, (ix + LEFT)
+    cp 2
+    jp c, test_cm_1
+    cp 9
+    jp z, test_cm_1
+    jp skip_cm_1
+test_cm_1:
+    set PLAYER_CAN_MOVE_LEFT_BIT, e
+skip_cm_1:
+
+    ld a, (ix + RIGHT)
+    cp 2
+    jp c, test_cm_2
+    cp 9
+    jp z, test_cm_2
+    jp skip_cm_2
+test_cm_2:
+    set PLAYER_CAN_MOVE_RIGHT_BIT, e
+skip_cm_2:
+
+    ld a, (ix + UP)
+    cp 2
+    jp c, test_cm_3
+    cp 9
+    jp z, test_cm_3
+    jp skip_cm_3
+test_cm_3:
+    set PLAYER_CAN_MOVE_UP_BIT, e
+skip_cm_3:
+
+    ld a, (ix + DOWN)
+    cp 2
+    jp c, test_cm_4
+    cp 9
+    jp z, test_cm_4
+    jp skip_cm_4
+test_cm_4:
+    set PLAYER_CAN_MOVE_DOWN_BIT, e
+skip_cm_4:
+
+    ld a, e
+    ld (player_can_move_mask), a
+    ret
+
+check_auto_restart:
+    ld a, (is_player_controllable)
+    or a
+    ret nz
+    ld hl, ticks_to_autorestart
+    dec (hl)
+    ret nz
+    ld a, 1
+    ld (need_restart_level), a
+    ret
+
+check_character_in_explo_cur:
+    ld a, (is_player_controllable)
+    or a
+    ret z
+    ld hl, (player_addr)
+    ld a, (hl)
+    and 0b00011111
+    cp 19
+    jp z, kill_player_by_explo
+    cp 25
+    jp z, kill_player_by_explo
+    cp 27
+    jp z, kill_player_by_explo
+    cp 28
+    ret nz
+
+check_character_in_explo_next:
+    ld a, (is_player_controllable)
+    or a
+    ret z
+    ld hl, (next_player_addr)
+    ld a, (hl)
+    and 0b00011111
+    cp 19
+    jp z, kill_player_by_explo
+    cp 25
+    jp z, kill_player_by_explo
+    cp 27
+    jp z, kill_player_by_explo
+    cp 28
+    ret nz
+
+kill_player_by_explo:
+    ld a, 30
+    ld (hl), a
+    xor a
+    ld (is_player_controllable), a
+    ret
+
+check_near_exit:
+    ld a, (is_player_controllable)
+    or a
+    ret z
+    ld ix, (next_player_addr)
+    ld a, 23
+    cp (ix + DOWN)
+    jp z, set_need_to_go_next_level
+    cp (ix + UP)
+    jp z, set_need_to_go_next_level
+    cp (ix + LEFT)
+    jp z, set_need_to_go_next_level
+    cp (ix + RIGHT)
+    ret nz
+set_need_to_go_next_level:
+    ld a, 1
+    ld (need_go_to_next_level), a
+    ret
+
+
+control_character:
+    call check_auto_restart
+    call check_character_in_explo_cur
+    call check_character_in_explo_next
+    call check_near_exit
+    xor a
+    ld (player_can_move_mask), a
+    ld a, (moved_on_prev_control)
+    or a
+    jp z, control_character_main
+    xor a
+    ld (moved_on_prev_control), a
+    jp control_character_post
+
+
+control_character_main:
+    ld a, (is_player_controllable)
+    or a
+    jp nz, skip_return_from_control
+    // character is dead
+
+    // test exit 'x'
+    ld a, (input_mask)
+    bit 7, a
+    jp nz, skip_test_exit
+    ld a, 1
+    ld (need_go_to_main_map), a
+skip_test_exit:
+    // test restart
+    bit 6, a
+    ret nz
+    ld a, 1
+    ld (need_restart_level), a
+    ret
+
+skip_return_from_control:
+    call update_input_mask
+    ld a, (saved_controls)
+    or a
+    jp z, ctrl1
+    ld c, a
+    xor a
+    ld (saved_controls), a
+
+ctrl1:
+    ld d, 24 // what must be on new place
+
+    // left
+    bit 4, c
+    jp nz, skipControlLeft
+    ld ix, (player_addr)
+    ld a, (ix + LEFT)
+    cp 2
+    jp c, moveLeft
+    cp 8
+    jp z, moveLeft
+    cp 9
+    jp z, moveLeft
+    cp 10
+    jp z, moveItemLeft
+    cp 14
+    jp z, moveItemLeft
+
+skipControlLeft:
+    
+    // right
+    bit 3, c
+    jp nz, skipControlRight
+    ld ix, (player_addr)
+    ld a, (ix + RIGHT)
+    cp 2
+    jp c, moveRight
+    cp 8
+    jp z, moveRight
+    cp 9
+    jp z, moveRight
+    cp 10
+    jp z, moveItemRight
+    cp 14
+    jp z, moveItemRight
+
+skipControlRight:
+
+    // down
+    bit 2, c
+    jp nz, skipControlDown
+    ld ix, (player_addr)
+    ld a, (ix + DOWN)
+    cp 2
+    jp c, moveDown
+    cp 8
+    jp z, moveDown
+    cp 9
+    jp z, moveDown
+    ret
+
+skipControlDown:
+
+    // up
+    bit 1, c
+    jp nz, skipControlUp
+    ld ix, (player_addr)
+    ld a, (ix + UP)
+    cp 2
+    jp c, moveUp
+    cp 9
+    jp z, moveUp
+    ret
+    
+skipControlUp:
+
+    // restart
+    bit 6, c
+    jp nz, skipControlRestart
+    ld a, 1
+    ld (need_restart_level), a
+    ret
+
+skipControlRestart:
+
+    // exit 'x'
+    bit 7, c
+    jp nz, skipControlExit
+    ld a, 1
+    ld (need_go_to_main_map), a
+    ret
+
+skipControlExit:    
+    ret
+
+moveItemLeft:    
+    ld a, (ix + LEFT + LEFT)
+    or a
+    ret nz
+
+    ld a, e
+    inc a
+    jp nz, skip_delayed_move_1
+        ld a, c
+        ld (saved_controls), a  // save current controls, move item on next stage
+        ret
+skip_delayed_move_1:
+    ld hl, sound_bits
+    set 1, (hl) // sound fx: move object
+
+    ld a, (ix + LEFT)
+    and 31
+    ld b, a
+    or DRAW_WITH_OFFSET | NULL_NEXT_STEP
+    ld (ix + LEFT), a
+    ld (ix + LEFT + 1), 3
+    ld d, a
+    ld a, b
+    or DRAW_WITH_OFFSET
+    ld (ix + LEFT + LEFT), a
+    ld (ix + LEFT + LEFT + 1), 2
+
+moveLeft:
+    CONSUME(LEFT)
+
+    bit 0, c
+    jp z, fakeMoveLeft
+
+    ld a, (player_x)
+    dec a
+    ld (player_x), a
+    dec a
+    ld (next_player_x), a
+
+    ld bc, -RIGHT
+    add ix, bc
+    ld (next_player_addr), ix
+    ld (ix), d
+
+    ld a, 1
+    ld (moved_on_prev_control), a
+    ret
+
+fakeMoveLeft:
+
+    ld a, 1
+    ld (moved_on_prev_control), a
+    ret
+
+
+moveItemRight:
+    ld a, (ix + RIGHT + RIGHT)
+    or a
+    ret nz
+
+    ld a, e
+    inc a
+    jp nz, skip_delayed_move_2
+        ld a, c
+        ld (saved_controls), a  // save current controls, move item on next stage
+        ret
+skip_delayed_move_2:
+    ld hl, sound_bits
+    set 1, (hl) // sound fx: move object
+
+    ld a, (ix + RIGHT)
+    and 31
+    ld b, a
+    or DRAW_WITH_OFFSET | NULL_NEXT_STEP
+    ld (ix + RIGHT), a
+    ld (ix + RIGHT + 1), 2
+    ld d, a
+    ld a, b
+    or DRAW_WITH_OFFSET
+    ld (ix + RIGHT + RIGHT), a
+    ld (ix + RIGHT + RIGHT + 1), 3
+
+moveRight:
+    CONSUME(RIGHT)
+
+    bit 0, c
+    jp z, fakeMoveRight
+
+    ld a, (player_x)
+    inc a
+    ld (player_x), a
+    inc a
+    ld (next_player_x), a
+
+    ld bc, RIGHT
+    add ix, bc
+    ld (next_player_addr), ix
+    ld (ix), d
+    ld a, 1
+    ld (moved_on_prev_control), a
+    ret
+
+fakeMoveRight:
+    ld a, 1
+    ld (moved_on_prev_control), a
+    ret
+
+moveDown:
+    CONSUME(DOWN)
+
+    bit 0, c
+    jp z, fakeMoveDown
+
+    ld a, (player_y)
+    inc a
+    ld (player_y), a
+    inc a
+    ld (next_player_y), a
+
+    ld bc, DOWN
+    add ix, bc
+    ld (next_player_addr), ix
+    ld (ix), d
+    ld a, 1
+    ld (moved_on_prev_control), a
+    ret
+
+fakeMoveDown:
+    ld a, 1
+    ld (moved_on_prev_control), a
+    ret
+
+moveUp:
+    CONSUME(UP)
+
+    bit 0, c
+    jp z, fakeMoveUp
+
+    ld a, (player_y)
+    dec a
+    ld (player_y), a
+    dec a
+    ld (next_player_y), a
+
+    ld bc, -DOWN
+    add ix, bc
+    ld (next_player_addr), ix
+    ld (ix), d
+    ld a, 1
+    ld (moved_on_prev_control), a
+    ret
+
+fakeMoveUp:
+    ld a, 1
+    ld (moved_on_prev_control), a
+    ret
+
+
+control_character_post:
+    ld a, (is_player_controllable)
+    or a
+    ret z
+
+    ld hl, (player_addr)
+    ld (hl), 0
+    ld hl, (next_player_addr)
+    ld (player_addr), hl
+    ld (hl), 24
+    inc l
+    ld (hl), 0
+    
+    ld hl, (next_player_y)
+    ld (player_y), hl
+
+    ret
+
+
+//////////////////////////
+/////  Update Level  /////
+//////////////////////////
+
+tick_counter:
+    .db 255
+tick_random:
+    .db 0
+
+update_level_main:
+    ld a, (tick_counter)
+    inc a
+    ld c, a
+    ld (tick_counter), a
+    ld l, a
+    ld h, randoms / 256
+    ld a, (hl)
+
+    ex af, af'
+    ld a, (sound_bits) // sound bits
+    ex af, af'
+
+    ld de, level_data + 64 + F_WIDTH * (F_HEIGHT - 2) * 2 - 2
+    ld a, (de)
+    ld b, 9
+
+    // tick_counter in c
+    // b == 9
+    // hl - pointer to item's function
+    ld hl, update_continue_main
+
+update_cell_main:
+    cp b
+    jp c, update_continue_main
+    cp 63
+    jp nc, update_continue_main
+
+    add a, a
+    ld (upd_ld_vector + 1), a
+upd_ld_vector:
+    ld hl, (update_call_table)
+upd_just_jump_to_previous:
+    jp (hl)
+
+
+upd_main_9: // crystal
+    ld ixh, d
+    ld ixl, e
+    ld a, (ix + DOWN)
+    or a
+    jp z, init_general_fall
+    
+    sub 3 // 3
+    jr z, test_roll_right_9
+    dec a // 4
+    jr z, test_roll_right_9
+    dec a // 5
+    jr z, test_roll_right_9
+    sub 4 // 9
+    jr z, test_roll_right_9
+    dec a // 10
+    jr z, test_roll_right_9
+    jp update_continue_main
+
+test_roll_right_9:
+    ld a, (ix + DOWN + RIGHT)
+    or a
+    jp nz, test_roll_left_9
+    ld a, (ix + RIGHT)
+    or a
+    jp nz, test_roll_left_9
+    ld a, (ix + UP + RIGHT)
+    sub b // 9
+    jr z, test_roll_left_9
+    dec a // 10
+    jr z, test_roll_left_9
+    sub 27 - 10 // 27
+    jr z, test_roll_left_9
+    dec a // 28
+    jr z, test_roll_left_9
+        ld (ix), 9 | DRAW_WITH_OFFSET | NULL_NEXT_STEP
+        ld (ix + 1), 2
+        ld (ix + RIGHT), 9 | DRAW_WITH_OFFSET
+        ld (ix + RIGHT + 1), 3
+        jp update_continue_main
+    
+test_roll_left_9:
+    ld a, (ix + DOWN + LEFT)
+    or a
+    jp nz, update_continue_main
+    ld a, (ix + LEFT)
+    or a
+    jp nz, update_continue_main
+    ld a, (ix + UP + LEFT)
+    sub b // 9
+    jp z, update_continue_main
+    dec a // 10
+    jp z, update_continue_main
+    sub 27 - 10 // 27
+    jp z, update_continue_main
+    dec a // 28
+    jp z, update_continue_main
+        ld (ix), 9 | DRAW_WITH_OFFSET | NULL_NEXT_STEP
+        ld (ix + 1), 3
+        ld (ix + LEFT), 9 | DRAW_WITH_OFFSET
+        ld (ix + LEFT + 1), 2
+        jp update_continue_main
+
+
+upd_main_10: // boulder
+    ld ixh, d
+    ld ixl, e
+    ld a, (ix + DOWN)
+    cp 11 // fire
+    jp nz, skip_boulder_fire
+        ex af, af'
+        set 5, a // sound bits: explo
+        ex af, af'
+        ld (ix), 19
+        ld (ix + 1), c // tick counter
+
+skip_boulder_fire:
+    or a
+    jp z, init_general_fall
+    
+    sub 3 // 3
+    jr z, test_roll_right_10
+    dec a // 4
+    jr z, test_roll_right_10
+    dec a // 5
+    jr z, test_roll_right_10
+    sub 4 // 9
+    jr z, test_roll_right_10
+    dec a // 10
+    jr z, test_roll_right_10
+    jp update_continue_main
+
+test_roll_right_10:
+    ld a, (ix + DOWN + RIGHT)
+    or a
+    jp nz, test_roll_left_10
+    ld a, (ix + RIGHT)
+    or a
+    jp nz, test_roll_left_10
+    ld a, (ix + UP + RIGHT)
+    sub b // 9
+    jr z, test_roll_left_10
+    dec a // 10
+    jr z, test_roll_left_10
+    sub 27 - 10 // 27
+    jr z, test_roll_left_10
+    dec a // 28
+    jr z, test_roll_left_10
+        ld (ix), 10 | DRAW_WITH_OFFSET | NULL_NEXT_STEP
+        ld (ix + 1), 2
+        ld (ix + RIGHT), 10 | DRAW_WITH_OFFSET
+        ld (ix + RIGHT + 1), 3
+        jp update_continue_main
+    
+test_roll_left_10:
+    ld a, (ix + DOWN + LEFT)
+    or a
+    jp nz, update_continue_main
+    ld a, (ix + LEFT)
+    or a
+    jp nz, update_continue_main
+    ld a, (ix + UP + LEFT)
+    sub b // 9
+    jp z, update_continue_main
+    dec a // 10
+    jp z, update_continue_main
+    sub 27 - 10 // 27
+    jp z, update_continue_main
+    dec a // 28
+    jp z, update_continue_main
+        ld (ix), 10 | DRAW_WITH_OFFSET | NULL_NEXT_STEP
+        ld (ix + 1), 3
+        ld (ix + LEFT), 10 | DRAW_WITH_OFFSET
+        ld (ix + LEFT + 1), 2
+        jp update_continue_main
+
+
+upd_main_11: // flame
+    ld ixh, d
+    ld ixl, e
+    ld a, (ix + DOWN)
+    or a
+    jp z, init_general_fall
+    cp 11
+    jp nz, um_skip_merge_11
+    ld a, (ix + UP)
+    cp 11
+    jp z, um_skip_merge_11
+        ld (ix), 11 | DRAW_WITH_OFFSET | NULL_NEXT_STEP
+        ld (ix + 1), 1
+        jp update_continue_main
+
+um_skip_merge_11:
+    ld a, e
+    xor b
+    rlca
+    rlca
+    rlca
+    add a, c
+    ld h, randoms / 256
+    ld l, a
+    ld a, (hl)
+    cp 5
+    jp nc, update_continue_main
+
+    ld a, (ix + RIGHT)
+    or a
+    jp nz, um_skip_expand_right
+        ld (ix + RIGHT), 11 | DRAW_WITH_OFFSET
+        ld (ix + RIGHT + 1), 3
+
+um_skip_expand_right:
+    ld a, (ix + LEFT)
+    or a
+    jp nz, um_skip_expand_left
+        ld (ix + LEFT), 11 | DRAW_WITH_OFFSET
+        ld (ix + LEFT + 1), 2
+        jp update_continue_main
+
+um_skip_expand_left:
+
+    jp update_continue_main
+
+
+upd_main_12: // green unit
+    ld ixh, d
+    ld ixl, e
+    ld a, (ix + UP)
+    sub 9
+    jp z, update_explode_to_void_at_ix
+    dec a
+    jp z, update_explode_to_void_at_ix
+
+
+    ld a, (ix + UP)
+    cp 11 // fire
+    jp z, update_explode_to_void_at_ix
+    ld a, (ix + RIGHT)
+    cp 11 // fire
+    jp z, update_explode_to_void_at_ix
+    ld a, (ix + DOWN)
+    cp 11 // fire
+    jp z, update_explode_to_void_at_ix
+
+    or a
+    jp z, init_general_fall
+
+    ld a, (ix + LEFT)
+    cp 24
+    jp z, update_explode_to_void_at_ix
+    or a
+    jp nz, change_dir_12
+        ld (ix), 12 | DRAW_WITH_OFFSET | NULL_NEXT_STEP
+        ld (ix + 1), 3
+        ld (ix + LEFT), 12 | DRAW_WITH_OFFSET
+        ld (ix + LEFT + 1), 2
+        jp update_continue_main
+
+change_dir_12:
+    ld (ix), 13
+    jp update_continue_main
+
+
+upd_main_13: // green unit
+    ld ixh, d
+    ld ixl, e
+    ld a, (ix + UP)
+    sub 9
+    jp z, update_explode_to_void_at_ix
+    dec a
+    jp z, update_explode_to_void_at_ix
+
+    ld a, (ix + UP)
+    cp 11 // fire
+    jp z, update_explode_to_void_at_ix
+    ld a, (ix + LEFT)
+    cp 11 // fire
+    jp z, update_explode_to_void_at_ix
+    ld a, (ix + DOWN)
+    cp 11 // fire
+    jp z, update_explode_to_void_at_ix
+
+    or a
+    jp z, init_general_fall
+
+    ld a, (ix + RIGHT)
+    cp 24
+    jp z, update_explode_to_void_at_ix
+    or a
+    jp nz, change_dir_13
+        ld (ix), 13 | DRAW_WITH_OFFSET | NULL_NEXT_STEP
+        ld (ix + 1), 2
+        ld (ix + RIGHT), 13 | DRAW_WITH_OFFSET
+        ld (ix + RIGHT + 1), 3
+        jp update_continue_main
+change_dir_13:
+    ld (ix), 12
+
+    jp update_continue_main
+
+
+upd_main_14: // magenta unit
+    ld ixh, d
+    ld ixl, e
+    ld a, (ix + DOWN)
+
+    or a
+    jp z, init_general_fall
+
+    and 0b00011111
+
+    cp 11
+    jp c, skip_1_14
+    cp 14
+    jp z, skip_1_14
+    cp 18 + 1
+    jp c, update_explode_to_crystals_at_ix
+
+skip_1_14:
+    ld a, (ix + UP)
+    and 0b00011111
+    cp 11
+    jp c, skip_2_14
+    cp 14
+    jp z, skip_2_14
+    cp 18 + 1
+    jp c, update_explode_to_crystals_at_ix
+
+skip_2_14:
+    ld a, (ix + LEFT)
+    and 0b00011111
+    cp 11
+    jp c, skip_3_14
+    cp 14
+    jp z, skip_3_14
+    cp 18 + 1
+    jp c, update_explode_to_crystals_at_ix
+
+skip_3_14:
+    ld a, (ix + RIGHT)
+    and 0b00011111
+    cp 11
+    jp c, update_continue_main
+    cp 14
+    jp z, update_continue_main
+    cp 18 + 1
+    jp c, update_explode_to_crystals_at_ix
+
+    jp update_continue_main
+
+
+upd_main_15:  // creep left
+    ld ixh, d
+    ld ixl, e
+    ld a, (ix + UP)
+    cp 24
+    jp z, update_explode_to_void_at_ix
+    sub 9
+    jp z, update_explode_to_void_at_ix
+    dec a
+    jp z, update_explode_to_void_at_ix
+
+    ld a, 24
+    cp (ix + LEFT)
+    jp z, update_explode_to_void_at_ix
+
+    xor a
+    or (ix + LEFT)
+    jp nz, creep_rotation_15
+
+    or (ix + LEFT + UP)
+    jp nz, creep_just_step_fwd_15
+        ld (ix), (15 + 1) | DRAW_WITH_OFFSET | NULL_NEXT_STEP
+        ld (ix + 1), 3
+        ld (ix + LEFT), (15 + 1) | DRAW_WITH_OFFSET
+        ld (ix + LEFT + 1), 2
+        jp update_continue_main
+    creep_just_step_fwd_15:
+        ld (ix), 15 | DRAW_WITH_OFFSET | NULL_NEXT_STEP
+        ld (ix + 1), 3
+        ld (ix + LEFT), 15 | DRAW_WITH_OFFSET
+        ld (ix + LEFT + 1), 2
+        jp update_continue_main
+    
+    creep_rotation_15:
+    or (ix + UP)
+    jp nz, creep_rotate_left_15
+        ld (ix), 15 + 1
+        jp update_continue_main
+    
+    creep_rotate_left_15:
+        ld (ix), 18
+        jp update_continue_main
+
+
+upd_main_16: // creep up
+    ld ixh, d
+    ld ixl, e
+    ld a, (ix + UP)
+    cp 24
+    jp z, update_explode_to_void_at_ix
+    sub 9
+    jp z, update_explode_to_void_at_ix
+    dec a
+    jp z, update_explode_to_void_at_ix
+
+    xor a
+    or (ix + UP)
+    jp nz, creep_rotation_16
+
+    or (ix + UP + RIGHT)
+    jp nz, creep_just_step_fwd_16
+        ld (ix), (16 + 1) | DRAW_WITH_OFFSET | NULL_NEXT_STEP
+        ld (ix + 1), 0
+        ld (ix + UP), (16 + 1) | DRAW_WITH_OFFSET
+        ld (ix + UP + 1), 1
+        jp update_continue_main
+    creep_just_step_fwd_16:
+        ld (ix), 16 | DRAW_WITH_OFFSET | NULL_NEXT_STEP
+        ld (ix + 1), 0
+        ld (ix + UP), 16 | DRAW_WITH_OFFSET
+        ld (ix + UP + 1), 1
+        jp update_continue_main
+    
+    creep_rotation_16:
+    or (ix + RIGHT)
+    jp nz, creep_rotate_left_16
+        ld (ix), 16 + 1
+        jp update_continue_main
+    
+    creep_rotate_left_16:
+        ld a, 24
+        cp (ix + RIGHT)
+        jp z, update_explode_to_void_at_ix
+
+        ld (ix), 16 - 1
+        jp update_continue_main
+
+
+upd_main_17: // creep right
+    ld ixh, d
+    ld ixl, e
+    ld a, (ix + UP)
+    sub 9
+    jp z, update_explode_to_void_at_ix
+    dec a
+    jp z, update_explode_to_void_at_ix
+
+    ld a, (ix + RIGHT)
+    cp 24
+    jp z, update_explode_to_void_at_ix
+    or a
+    jp nz, creep_rotation_17
+    xor a
+
+    or (ix + RIGHT + DOWN)
+    jp nz, creep_just_step_fwd_17
+        ld (ix), (17 + 1) | DRAW_WITH_OFFSET | NULL_NEXT_STEP
+        ld (ix + 1), 2
+        ld (ix + RIGHT), (17 + 1) | DRAW_WITH_OFFSET
+        ld (ix + RIGHT + 1), 3
+        jp update_continue_main
+    creep_just_step_fwd_17:
+        ld (ix), 17 | DRAW_WITH_OFFSET | NULL_NEXT_STEP
+        ld (ix + 1), 2
+        ld (ix + RIGHT), 17 | DRAW_WITH_OFFSET
+        ld (ix + RIGHT + 1), 3
+        jp update_continue_main
+    
+    creep_rotation_17:
+    or (ix + DOWN)
+    jp nz, creep_rotate_left_17
+        ld (ix), 17 + 1
+        jp update_continue_main
+    
+    creep_rotate_left_17:
+        ld a, 24
+        cp (ix + DOWN)
+        jp z, update_explode_to_void_at_ix
+
+        ld (ix), 17 - 1
+        jp update_continue_main
+
+
+upd_main_18: // creep down
+    ld ixh, d
+    ld ixl, e
+
+    ld a, (ix + DOWN)
+    cp 24
+    jp z, update_explode_to_void_at_ix
+    or a
+    jp nz, creep_rotation_18
+    xor a
+
+    or (ix + DOWN + LEFT)
+    jp nz, creep_just_step_fwd_18
+        ld (ix), (15) | DRAW_WITH_OFFSET | NULL_NEXT_STEP
+        ld (ix + 1), 1
+        ld (ix + DOWN), (15) | DRAW_WITH_OFFSET
+        ld (ix + DOWN + 1), 0
+        jp update_continue_main
+    creep_just_step_fwd_18:
+        ld (ix), 18 | DRAW_WITH_OFFSET | NULL_NEXT_STEP
+        ld (ix + 1), 1
+        ld (ix + DOWN), 18 | DRAW_WITH_OFFSET
+        ld (ix + DOWN + 1), 0
+        jp update_continue_main
+    
+    creep_rotation_18:
+    or (ix + LEFT)
+    jp nz, creep_rotate_left_18
+        ld (ix), 15
+        jp update_continue_main
+    
+    creep_rotate_left_18:
+        ld a, 24
+        cp (ix + LEFT)
+        jp z, update_explode_to_void_at_ix
+
+        ld (ix), 18 - 1
+        jp update_continue_main
+
+
+upd_main_19:
+    ld ixh, d
+    ld ixl, e
+    ld a, c // tick counter
+    cp (ix + 1)
+    jp z, update_continue_main
+    ld (ix), 20
+    ex af, af'
+    set 6, a // sound bits: explo
+    ex af, af'
+    jp update_continue_main
+upd_main_20:
+    ld ixh, d
+    ld ixl, e
+    ld (ix), 21
+    ex af, af'
+    set 7, a // sound bits: explo
+    ex af, af'
+    jp update_continue_main
+upd_main_21:
+    ld ixh, d
+    ld ixl, e
+    ld (ix), 22
+    jp update_continue_main
+upd_main_22:
+    ld ixh, d
+    ld ixl, e
+    ld (ix), 0
+    jp update_continue_main
+upd_main_23:
+//  ld ixh, d
+//  ld ixl, e
+    jp update_continue_main
+upd_main_24:
+//  ld ixh, d
+//  ld ixl, e
+    jp update_continue_main
+upd_main_25:
+    ld ixh, d
+    ld ixl, e
+    ld a, c // tick counter
+    cp (ix + 1)
+    jp z, update_continue_main
+    ld (ix), 26
+    ex af, af'
+    set 6, a // sound bits: explo
+    ex af, af'
+    jp update_continue_main
+upd_main_26:
+    ld ixh, d
+    ld ixl, e
+    ld (ix), b
+    ex af, af'
+    set 7, a // sound bits: explo
+    ex af, af'
+    jp update_continue_main
+
+upd_main_27: // explode to crystals
+    ld ixh, d
+    ld ixl, e
+    ld a, c // tick counter
+    cp (ix + 1)
+    jp z, update_continue_main
+    jp update_explode_to_crystals_at_ix
+
+upd_main_28: // explode to void
+    ld ixh, d
+    ld ixl, e
+    ld a, c // tick counter
+    cp (ix + 1)
+    jp z, update_continue_main
+    jp update_explode_to_void_at_ix
+
+upd_main_29:
+    ld ixh, d
+    ld ixl, e
+    ld a, (ix + DOWN)
+    or a
+    jp z, init_general_fall
+    jp update_continue_main
+
+upd_main_30:
+    ld ixh, d
+    ld ixl, e
+    ld a, (ix + DOWN)
+    or a
+    jp z, init_general_fall
+    cp 19
+    jp c, make_second_dead_frame
+    jp update_continue_main
+make_second_dead_frame:
+    ld (ix), 29
+    jp update_continue_main
+
+upd_main_31:
+//  ld ixh, d
+//  ld ixl, e
+    jp update_continue_main
+upd_main_32:
+//  ld ixh, d
+//  ld ixl, e
+    jp update_continue_main
+
+
+init_general_fall:
+    push de
+    ex de, hl
+    set 5, (hl)
+    ld de, 128
+    add hl, de
+    pop de
+    ld a, (hl)
+    cp 24
+    jp nz, upd_fall_common
+    jp update_continue_main
+
+
+upd_fall_common:
+    ld a, (de)
+    ld h, a // H - object
+    and 31
+    ld l, a
+
+    ld ixh, d
+    ld ixl, e
+    ld a, (ix + DOWN)
+    or a
+    jp nz, um_skip_fall_common
+        ex af, af'
+        set 2, a // sound bits: falling
+        ex af, af'
+        ld a, h
+        or DRAW_WITH_OFFSET
+        ld (ix + DOWN), a
+        ld (ix + DOWN + 1), 0
+        or NULL_NEXT_STEP
+        ld (de), a
+        ld (ix + 1), 1
+        jp update_continue_main
+um_skip_fall_common:
+    ex af, af'
+    set 3, a // sound bits: fallen
+    ex af, af'
+    inc e // process this cell again after fall
+    inc e
+    ld (ix), l
+    and 31
+
+    cp 4
+    jp nz, skip_crash_glass_common
+    ld (ix + DOWN), 5
+    jp update_continue_main
+skip_crash_glass_common:
+    cp 5
+    jp nz, skip_crash_glass_common_x
+    ld (ix + DOWN), 19 // explode to void
+    ld (ix + DOWN + 1), c // tick counter
+    jp update_continue_main
+
+skip_crash_glass_common_x:
+    cp 14
+    jp nz, skip_explode_magenta_common
+    push bc
+    ld bc, DOWN
+    add ix, bc
+    pop bc
+    jp update_explode_to_crystals_at_ix
+
+skip_explode_magenta_common:
+    cp 24
+    jp z, kill_player
+    cp 12
+    jp c, skip_common_explosion
+    cp 19
+    jp nc, skip_common_explosion
+    ld a, l
+    cp 12
+    jp z, skip_common_explosion
+    cp 13
+    jp z, skip_common_explosion
+start_common_explosion:
+    push bc
+    ld bc, DOWN
+    add ix, bc
+    pop bc
+    jp update_explode_to_void_at_ix
+
+skip_common_explosion:
+    jp update_continue_main
+
+kill_player:
+    push hl
+    ld hl, is_player_controllable
+    ld (hl), 0
+    pop hl
+    push bc
+    ld bc, DOWN
+    add ix, bc
+    ld (ix), 30
+    pop bc
+    jp update_explode_to_void_at_ix
+
+
+update_explode_to_void_at_ix:
+    push de
+    call update_explode_to_void_at_ix_func
+    pop de
+    jp update_continue_main
+
+update_explode_to_crystals_at_ix:
+    push de
+    call update_explode_to_crystals_at_ix_func
+    pop de
+    jp update_continue_main
+
+
+update_explode_to_void_at_ix_func:
+EXPLODE_CELL_TO_VOID:
+    .macro(offset)
+        ld a, (ix + {{offset}})
+        and 0b00011111
+        cp 2
+        jr z, skip_explo_cell
+        cp 6
+        jr z, skip_explo_cell
+        cp 9
+        jr z, skip_explo_cell
+        cp 23
+        jr z, skip_explo_cell
+        cp 25
+        jr z, skip_explo_cell
+        cp 26
+        jr z, skip_explo_cell
+        cp 27
+        jr z, skip_explo_cell
+        cp 29
+        jr z, skip_explo_cell
+        cp 30
+        jr z, skip_explo_cell
+        cp 12
+        jr c, do_explode
+        cp 19
+        jr nc, do_explode
+
+        ld (ix + {{offset}}), 19
+        ld (ix + {{offset}} + 1), c // tick counter
+        cp 14
+        jr z, exlo_crystals
+        ld (ix + {{offset}}), 28
+        jr skip_explo_cell
+        exlo_crystals:
+        ld (ix + {{offset}}), 27
+        jr skip_explo_cell
+
+        do_explode:
+        ld (ix + {{offset}}), 19
+        ld (ix + {{offset}} + 1), c // tick counter
+        skip_explo_cell:
+    .endm
+
+    ld a, (ix)
+    cp 30
+    jp z, skip_explo_dead_player
+    ld (ix), 19
+    ld (ix + 1), c // tick counter
+skip_explo_dead_player:
+
+    EXPLODE_CELL_TO_VOID(UP + LEFT)
+    EXPLODE_CELL_TO_VOID(UP)
+    EXPLODE_CELL_TO_VOID(UP + RIGHT)
+    EXPLODE_CELL_TO_VOID(LEFT)
+    EXPLODE_CELL_TO_VOID(RIGHT)
+    EXPLODE_CELL_TO_VOID(LEFT + DOWN)
+    EXPLODE_CELL_TO_VOID(DOWN)
+    EXPLODE_CELL_TO_VOID(RIGHT + DOWN)
+    ex af, af'
+    set 5, a // sound bits: explo
+    ex af, af'
+    ret
+
+update_explode_to_crystals_at_ix_func:
+
+EXPLODE_CELL_TO_CRYSTAL:
+    .macro(offset)
+        ld a, (ix + {{offset}})
+        and 0b00011111
+        cp 2
+        jr z, skip_explo_cell
+        cp 6
+        jr z, skip_explo_cell
+        cp 23
+        jr z, skip_explo_cell
+        cp 25
+        jr z, skip_explo_cell
+        cp 26
+        jr z, skip_explo_cell
+        cp 27
+        jr z, skip_explo_cell
+        cp 29
+        jr z, skip_explo_cell
+        cp 30
+        jr z, skip_explo_cell
+        cp 14
+        jr nz, do_explode
+
+        ld (ix + {{offset}}), 27
+        ld (ix + {{offset}} + 1), c // tick counter
+        jr skip_explo_cell
+
+        do_explode:
+        ld (ix + {{offset}}), 25
+        ld (ix + {{offset}} + 1), c // tick counter
+        skip_explo_cell:
+    .endm
+
+    ld (ix), 25
+    ld (ix + 1), c // tick counter
+
+    EXPLODE_CELL_TO_CRYSTAL(UP + LEFT)
+    EXPLODE_CELL_TO_CRYSTAL(UP)
+    EXPLODE_CELL_TO_CRYSTAL(UP + RIGHT)
+    EXPLODE_CELL_TO_CRYSTAL(LEFT)
+    EXPLODE_CELL_TO_CRYSTAL(RIGHT)
+    EXPLODE_CELL_TO_CRYSTAL(LEFT + DOWN)
+    EXPLODE_CELL_TO_CRYSTAL(DOWN)
+    EXPLODE_CELL_TO_CRYSTAL(RIGHT + DOWN)
+    ex af, af'
+    set 5, a // sound bits: explo
+    ex af, af'
+    ret
+
+
+update_continue_main:
+    dec de
+    dec e
+    ld a, (de)
+    cp b
+    jp c, update_continue_main
+    jp update_cell_main
+exit_from_main_update:
+    ex af, af'
+    ld (sound_bits), a
+    ex af, af'
+    ret
+
+
+update_level_post:
+    ld d, 64
+    ld e, 63
+    ld hl, level_data + 64
+    ld c, F_HEIGHT - 2
+update_raw_post:
+    ld b, F_WIDTH / 2
+update_cell_post:
+    ld a, (hl)
+    cp d
+    jp c, update_continue_step
+    bit 7, a
+    jp z, ucp_1
+    xor a
+ucp_1:
+    and e
+    ld (hl), a
+
+update_continue_step:
+    inc l
+    inc l
+    ld a, (hl)
+    cp d
+    jp c, update_continue_post
+    bit 7, a
+    jp z, ucp_2
+    xor a
+ucp_2:
+    and e
+    ld (hl), a
+
+
+update_continue_post:
+    inc l
+    inc hl
+    djnz update_cell_post
+    dec c
+    jp nz, update_raw_post
+    ret
+
+
+    .align 256
+update_call_table:
+    .dw update_continue_step // 0
+    .dw update_continue_step // 1
+    .dw update_continue_step // 2
+    .dw update_continue_step // 3
+    .dw update_continue_step // 4
+    .dw update_continue_step // 5
+    .dw update_continue_step // 6
+    .dw update_continue_step // 7
+    .dw update_continue_step // 8
+    .dw upd_main_9
+    .dw upd_main_10
+    .dw upd_main_11
+    .dw upd_main_12
+    .dw upd_main_13
+    .dw upd_main_14
+    .dw upd_main_15
+    .dw upd_main_16
+    .dw upd_main_17
+    .dw upd_main_18
+    .dw upd_main_19
+    .dw upd_main_20
+    .dw upd_main_21
+    .dw upd_main_22
+    .dw upd_main_23
+    .dw upd_main_24
+    .dw upd_main_25
+    .dw upd_main_26
+    .dw upd_main_27
+    .dw upd_main_28
+    .dw upd_main_29
+    .dw upd_main_30
+    .dw upd_main_31
+    .dw update_continue_step // fall 0
+    .dw update_continue_step // fall 1
+    .dw exit_from_main_update // fall 2 - marker 'exit from update'
+    .dw update_continue_step // fall 3
+    .dw update_continue_step // fall 4
+    .dw update_continue_step // fall 5
+    .dw update_continue_step // fall 6
+    .dw update_continue_step // fall 7
+    .dw update_continue_step // fall 8
+    .dw upd_fall_common
+    .dw upd_fall_common
+    .dw upd_fall_common
+    .dw upd_fall_common
+    .dw upd_fall_common
+    .dw upd_fall_common
+    .dw upd_main_15
+    .dw upd_main_16
+    .dw upd_main_17
+    .dw upd_main_18
+    .dw upd_main_19
+    .dw upd_main_20
+    .dw upd_main_21
+    .dw upd_main_22
+    .dw upd_main_23
+    .dw upd_main_24
+    .dw upd_main_25
+    .dw upd_main_26
+    .dw upd_main_27
+    .dw upd_main_28
+    .dw upd_main_29
+    .dw upd_main_30
+    .dw upd_main_31
+
+    
+interrupt_handler:
+    push af
+    push bc
+    push de
+    push hl
+    push ix
+
+    ld a, (need_reset_input)
+    or a
+    call nz, reset_input
+    ld a, (already_in_accum_input)
+    or a
+    call z, accum_input
+
+    call immediate_control_player
+
+    pop ix
+    pop hl
+    pop de
+    pop bc
+    pop af
+    ei
+    reti
+
+immediate_draw_player_head:
+    // input HL - render proc addresss
+    ld (im_head_1 + 1), hl
+    inc h
+    ld (im_head_2 + 1), hl
+last_player_bits:
+    ld hl, 0
+    ld e, h
+    ld d, 0
+im_head_1:
+    call 0
+im_head_2:
+    call 0
+    ret
+
+immediate_control_player:
+    ld a, (is_player_controllable)
+    or a
+    ret z
+
+    ld a, (moved_on_prev_control)
+    or a
+    ret nz
+
+    ld a, (latest_input_mask)   
+    ld c, a
+
+    // left
+    bit 4, c
+    jp nz, skip_immediate_left
+    ld hl, 32768 + 2 * 32
+    ld (pl_head + 1), hl
+    call immediate_draw_player_head
+    ld bc, -2
+    jp immediate_move_player_char
+
+skip_immediate_left:
+    // right
+    bit 3, c
+    jp nz, skip_immediate_right
+    ld hl, 32768 + 3 * 32
+    ld (pl_head + 1), hl
+    call immediate_draw_player_head
+    ld bc, 2
+    jp immediate_move_player_char
+
+skip_immediate_right:
+    // down
+    bit 2, c
+    jp nz, skip_immediate_down
+    ld hl, 32768 + 0 * 32
+    ld (pl_head + 1), hl
+    call immediate_draw_player_head
+    ld bc, 64
+    jp immediate_move_player_char
+
+skip_immediate_down:
+    // up
+    bit 1, c
+    jp nz, skip_immediate_up
+    ld hl, 32768 + 1 * 32
+    ld (pl_head + 1), hl
+    call immediate_draw_player_head
+    ld bc, -64
+    jp immediate_move_player_char
+
+skip_immediate_up:
+    ld hl, 32768 + 32 * 228
+    ld (pl_head + 1), hl
+    ret
+
+immediate_move_player_char:
+    ld hl, (next_player_addr)
+    add hl, bc
+    ld a, (hl)
+    cp 9
+    jp z, im_continue_1
+    cp 1
+    ret nz
+
+im_continue_1:
+    ld a, (need_reset_input)
+    or a
+    ret nz
+
+im_last_player_attr:
+    ld hl, 0
+    add hl, bc
+    set 0, (hl)
+    inc l
+    set 0, (hl)
+    ld bc, 32
+    add hl, bc
+    set 0, (hl)
+    dec l
+    set 0, (hl)
+    ret
+
+
+test_broken_kempston:
+    halt
+    ld bc, 31
+    in a, (c)
+    or a
+    ret z
+    ld hl, for_null_kempston
+    ld (hl), 0xAF  // xor a
+    ret
+
+reset_input:
+    ld a, 255
+    ld (input_mask), a
+    ld (latest_input_mask), a
+    xor a
+    ld (need_reset_input), a
+    ret
+
+accum_input:
+    ld a, 1
+    ld (already_in_accum_input), a
+
+    ld a, (input_mask)
+    ld e, a
+    ld bc, 61438 // 0..6
+    in a, (c)
+    or 0b11100000   // XRI00000
+    ld d, a
+
+    ld bc, 65278 // CS..V
+    in a, (c)
+    bit 2, a // X
+    jp nz, skip_input_0
+    res 7, d
+skip_input_0:
+    ld bc, 64510 // T..Q
+    in a, (c)
+    bit 3, a // R
+    jp nz, skip_input_1_t
+    res 6, d
+skip_input_1_t:
+    bit 0, a
+    jp nz, skip_input_1
+    res 1, d
+skip_input_1:
+    ld bc, 65022 // G..A
+    in a, (c)
+    bit 0, a
+    jp nz, skip_input_2
+    res 2, d
+skip_input_2:
+    ld bc, 57342 // Y..P
+    in a, (c)
+
+    bit 2, a // I
+    jp nz, skip_input_3_t
+    res 5, d
+skip_input_3_t:
+    bit 0, a
+    jp nz, skip_input_3
+    res 3, d
+skip_input_3:
+    bit 1, a
+    jp nz, skip_input_4
+    res 4, d
+skip_input_4:
+    ld bc, 32766 // B..SPACE
+    in a, (c)
+    cpl
+    and 15
+    jp z, skip_input_5
+    res 0, d
+skip_input_5:   
+
+    // kempston joystick
+    ld bc, 31
+    in a, (c)
+
+for_null_kempston:
+    nop
+
+    bit 0, a
+    jp z, skip_kempston_1
+    res 3, d
+skip_kempston_1:
+    bit 1, a
+    jp z, skip_kempston_2
+    res 4, d
+skip_kempston_2:
+    bit 2, a
+    jp z, skip_kempston_3
+    res 2, d
+skip_kempston_3:
+    bit 3, a
+    jp z, skip_kempston_4
+    res 1, d
+skip_kempston_4:
+    bit 4, a
+    jp z, skip_kempston_5
+    res 0, d
+skip_kempston_5:
+
+    ld a, d
+    ld (latest_input_mask), a
+    and e
+    ld (input_mask), a
+    
+    xor a
+    ld (already_in_accum_input), a
+    ret
+
+
+on_level_complete:
+    ld a, (meta_select_x)
+    ld b, 0
+    ld c, a
+    ld hl, meta_cave_progress_0
+    add hl, bc
+    ld a, (meta_select_y)
+    inc a
+    cp 5
+    jp nc, on_cave_complete
+    jp z, skip_inc_level
+    ld (meta_select_y), a
+skip_inc_level:
+    cp (hl)
+    jp c, skip_update_progress
+    ld (hl), a
+skip_update_progress:
+    call fade_out
+    call load_level
+    jp gameplay_loop
+on_cave_complete:
+    dec a
+    ld b, a
+    ld a, (is_artifact_collected)
+    add a, b
+    cp (hl)
+    jp c, skip_update_progress_2
+    ld (hl), a
+skip_update_progress_2:
+    jp go_to_main_map
+    
+
+go_to_main_map:
+    ld a, 5
+    ld hl, meta_cave_progress_0
+    cp (hl)
+    jp nz, skip_final_screen
+    inc hl
+    cp (hl)
+    jp nz, skip_final_screen
+    inc hl
+    cp (hl)
+    jp nz, skip_final_screen
+    inc hl
+    cp (hl)
+    call z, go_to_final_screen
+skip_final_screen:
+    ld hl, sprite_remap_index_for_main_menu
+    call init_sprite_remap
+    call reset_gameplay_variables
+    call render_main_map
+    jp update_main_map
+
+go_to_final_screen:
+    nop
+    ld a, 201 // ret
+    ld (go_to_final_screen), a // show only once
+
+    call fade_to_white
+    call fade_out
+    call fade_to_white
+    call fade_out
+
+    call render_background_red_dots
+
+    ld de, 3 * 256 + 2
+    ld a, 7 + 64
+    ld bc, str_final_screen_1
+    call render_text_xy
+
+    ld de, 3 * 256 + 4
+    ld a, 7 + 64
+    ld bc, str_final_screen_2
+    call render_text_xy
+
+    ld de, 3 * 256 + 7
+    ld a, 7 + 64
+    ld bc, str_final_screen_3
+    call render_text_xy
+
+    ld de, 3 * 256 + 9
+    ld a, 7 + 64
+    ld bc, str_final_screen_4
+    call render_text_xy
+
+    ld de, 3 * 256 + 11
+    ld a, 7 + 64
+    ld bc, str_final_screen_5
+    call render_text_xy
+
+    ld de, 3 * 256 + 13
+    ld a, 7 + 64
+    ld bc, str_final_screen_6
+    call render_text_xy
+
+    ld de, 3 * 256 + 16
+    ld a, 6 + 64
+    ld bc, str_final_screen_7
+    call render_text_xy
+
+    ld de, 3 * 256 + 18
+    ld a, 6 + 64
+    ld bc, str_final_screen_8
+    call render_text_xy
+
+    ld de, 3 * 256 + 20
+    ld a, 6 + 64
+    ld bc, str_final_screen_9
+    call render_text_xy
+    call music_proc
+    call fade_to_white
+    call fade_out
+    ret
+
+render_background_red_dots:
+    ld c, 12
+    ld e, 0
+render_final_screen_raw:
+    ld b, 16
+    ld d, 0
+render_final_screen_cell:
+    push de
+    push bc
+    ld a, e
+    xor d
+    rrca
+    and 1
+    add a, 58
+    call render_single_sprite
+    pop bc
+    pop de
+    inc d
+    inc d
+    djnz render_final_screen_cell
+
+    inc e
+    inc e
+    dec c
+    jp nz, render_final_screen_raw
+    ret
+
+
+COPY_FROM_SCREEN_TO_BUF:
+    .macro(index)
+        ld de, last_byte + 32 * 3 * {{index}}
+        ld hl, 16384 + 2048 * 2 + 32 * 5 + 256 * {{index}}
+        ld c, 32 * 3
+        ldir
+    .endm
+
+COPY_FROM_BUF_TO_SCREEN:
+    .macro(index)
+        ld hl, last_byte + 32 * 3 * {{index}}
+        ld de, 16384 + 256 * {{index}}
+        ld c, 32 * 3
+        ldir
+    .endm
+
+copy_title_from_screen:
+    ld b, 0
+    COPY_FROM_SCREEN_TO_BUF(0)
+    COPY_FROM_SCREEN_TO_BUF(1)
+    COPY_FROM_SCREEN_TO_BUF(2)
+    COPY_FROM_SCREEN_TO_BUF(3)
+    COPY_FROM_SCREEN_TO_BUF(4)
+    COPY_FROM_SCREEN_TO_BUF(5)
+    COPY_FROM_SCREEN_TO_BUF(6)
+    COPY_FROM_SCREEN_TO_BUF(7)
+    ret
+
+copy_title_to_screen:
+    ld b, 0
+    COPY_FROM_BUF_TO_SCREEN(0)
+    COPY_FROM_BUF_TO_SCREEN(1)
+    COPY_FROM_BUF_TO_SCREEN(2)
+    COPY_FROM_BUF_TO_SCREEN(3)
+    COPY_FROM_BUF_TO_SCREEN(4)
+    COPY_FROM_BUF_TO_SCREEN(5)
+    COPY_FROM_BUF_TO_SCREEN(6)
+    COPY_FROM_BUF_TO_SCREEN(7)
+    ld hl, 16384 + 2048 * 3
+    ld de, 16384 + 2048 * 3 + 1
+    ld c, 32 * 3 - 1
+    ld (hl), 64 + 7
+    ldir
+    ret
+
+str_final_screen_3:
+    .defn "THIS WILL HELP THE MAIN"
+str_final_screen_1:
+    .defn "ALL ARTIFACTS HAVE BEEN"
+str_final_screen_2:
+    .defn "SUCCESSFULLY RECOVERED."
+str_final_screen_9:
+    .defn "FOR FURTHER TASKS."
+str_final_screen_4:
+    .defn "ARCHAEOLOGICAL COMPUTER"
+str_final_screen_6:
+    .defn "ON THIS PLANET."
+str_final_screen_7:
+    .defn "YOU WILL BE DELIVERED TO"
+str_final_screen_5:
+    .defn "UNDERSTAND WHAT HAPPENED"
+str_final_screen_8:
+    .defn "THE STORAGE CELL, AWAITING"
+
+
+str_crystals:
+    .defn "CRYSTALS: "
+str_go_to_exit:
+    .defn "GO TO EXIT  "
+str_artifact_found:
+    .defn "ARTIFACT FOUND"
+str_space:
+    .defn " "
+
+    .align 8
+
+player_addr:
+    .dw level_data + 68
+next_player_addr:
+    .dw level_data + 68
+
+player_y: // in 8x8
+    .db 2
+player_x: // in 8x8
+    .db 2
+next_player_y:
+    .db 2
+next_player_x
+    .db 2
+camera_pos_y: // in 8x8
+    .db 0
+camera_pos_x: // in 8x8
+    .db 0
+moved_on_prev_control:
+    .db 0
+saved_controls:
+    .db 0
+crystals_left:
+    .db 0
+is_artifact_collected:
+    .db 0
+player_can_move_mask:
+    .db 0
+is_player_controllable:
+    .db 0
+ticks_to_autorestart:
+    .db 0
+need_go_to_next_level:
+    .db 0
+need_go_to_main_map:
+    .db 0
+sound_bits:
+    .db 0
+
+    .align 4
+meta_cave_progress_0: // 0, 1, 2, 3, 4 - number of completed levels, 5 - artifact found
+    .db 0
+meta_cave_progress_1:
+    .db 0
+meta_cave_progress_2:
+    .db 0
+meta_cave_progress_3:
+    .db 0
+meta_select_x:
+    .db 0
+meta_select_y:
+    .db 0
+meta_ignore_input:
+    .db 0
+need_restart_level:
+    .db 0
+
+input_mask:
+    .db 255
+latest_input_mask:
+    .db 255
+prev_input_mask:
+    .db 255
+need_reset_input:
+    .db 1
+already_in_accum_input
+    .db 0
+str_buf_8:
+    .db 0, 0, 0, 0, 0, 0, 0, 0
+
+music_proc:
+    //wait 1.5 sec
+    ld b, 75
+before_music_wait:
+    halt
+    djnz before_music_wait
+
+BORDER_COL__8:     EQU  $0
+
+; *****************************************************************************
+; * Phaser1 Engine, with synthesised DRUMS__8
+; *
+; * Original code by Shiru - http://shiru.untergrund.net/
+; * Modified by Chris Cowley
+; *
+; * Produced by Beepola v1.08.01
+; ******************************************************************************
+ 
+START__8:
+             LD    HL,MUSICDATA__8         ;  <- Pointer to Music Data. Change
+                                        ;     this to play a different song
+             LD   A,(HL)                         ; Get the loop START__8 pointer
+             LD   (PATTERN_LOOP_BEGIN__8),A
+             INC  HL
+             LD   A,(HL)                         ; Get the song end pointer
+             LD   (PATTERN_LOOP_END__8),A
+             INC  HL
+             LD   E,(HL)
+             INC  HL
+             LD   D,(HL)
+             INC  HL
+             LD   (INSTRUM_TBL__8),HL
+             LD   (CURRENT_INST__8),HL
+             ADD  HL,DE
+             LD   (PATTERN_ADDR__8),HL
+             XOR  A
+             LD   (PATTERN_PTR__8),A                ; Set the pattern pointer to zero
+             LD   H,A
+             LD   L,A
+             LD   (NOTE_PTR__8),HL                  ; Set the note offset (within this pattern) to 0
+
+PLAYER__8:
+             DI
+             PUSH IY
+             LD   A,BORDER_COL__8
+             LD   H,$00
+             LD   L,A
+             LD   (CNT_1A__8),HL
+             LD   (CNT_1B__8),HL
+             LD   (DIV_1A__8),HL
+             LD   (DIV_1B__8),HL
+             LD   (CNT_2__8),HL
+             LD   (DIV_2__8),HL
+             LD   (OUT_1__8),A
+             LD   (OUT_2__8),A
+             JR   MAIN_LOOP__8
+
+; ********************************************************************************************************
+; * NEXT_PATTERN__8
+; *
+; * Select the next pattern in sequence (and handle looping if we've reached PATTERN_LOOP_END__8
+; * Execution falls through to PLAYNOTE to play the first note from our next pattern
+; ********************************************************************************************************
+NEXT_PATTERN__8:
+                          LD   A,(PATTERN_PTR__8)
+                          INC  A
+                          INC  A
+                          DEFB $FE                           ; CP n
+PATTERN_LOOP_END__8:         DEFB 0
+                          JR   NZ,NO_PATTERN_LOOP__8
+                          ; Handle Pattern Looping at and of song
+                          DEFB $3E                           ; LD A,n
+PATTERN_LOOP_BEGIN__8:       DEFB 0
+NO_PATTERN_LOOP__8:          LD   (PATTERN_PTR__8),A
+                          LD   HL,$0000
+                          LD   (NOTE_PTR__8),HL   ; START__8 of pattern (NOTE_PTR__8 = 0)
+
+MAIN_LOOP__8:
+             LD   IYL,0                        ; Set channel = 0
+
+READ_LOOP__8:
+             LD   HL,(PATTERN_ADDR__8)
+             LD   A,(PATTERN_PTR__8)
+             LD   E,A
+             LD   D,0
+             ADD  HL,DE
+             LD   E,(HL)
+             INC  HL
+             LD   D,(HL)                       ; Now DE = START__8 of Pattern data
+             LD   HL,(NOTE_PTR__8)
+             INC  HL                           ; Increment the note pointer and...
+             LD   (NOTE_PTR__8),HL                ; ..store it
+             DEC  HL
+             ADD  HL,DE                        ; Now HL = address of note data
+             LD   A,(HL)
+             OR   A
+             JR   Z,NEXT_PATTERN__8               ; select next pattern
+
+             BIT  7,A
+             JP   Z,RENDER__8                     ; Play the currently defined note(S) and drum
+             LD   IYH,A
+             AND  $3F
+             CP   $3C
+             JP   NC,OTHER__8                     ; OTHER__8 parameters
+             ADD  A,A
+             LD   B,0
+             LD   C,A
+             LD   HL,FREQ_TABLE__8
+             ADD  HL,BC
+             LD   E,(HL)
+             INC  HL
+             LD   D,(HL)
+             LD   A,IYL                        ; IYL = 0 for channel 1, or = 1 for channel 2
+             OR   A
+             JR   NZ,SET_NOTE2__8
+             LD   (DIV_1A__8),DE
+             EX   DE,HL
+
+             DEFB $DD,$21                      ; LD IX,nn
+CURRENT_INST__8:
+             DEFW $0000
+
+             LD   A,(IX+$00)
+             OR   A
+             JR   Z,L809B__8                      ; Original code jumps into byte 2 of the DJNZ (invalid opcode FD)
+             LD   B,A
+L8098__8:       ADD  HL,HL
+             DJNZ L8098__8
+L809B__8:       LD   E,(IX+$01)
+             LD   D,(IX+$02)
+             ADD  HL,DE
+             LD   (DIV_1B__8),HL
+             LD   IYL,1                        ; Set channel = 1
+             LD   A,IYH
+             AND  $40
+             JR   Z,READ_LOOP__8                  ; No phase reset
+
+             LD   HL,OUT_1__8                     ; Reset phaser
+             RES  4,(HL)
+             LD   HL,$0000
+             LD   (CNT_1A__8),HL
+             LD   H,(IX+$03)
+             LD   (CNT_1B__8),HL
+             JR   READ_LOOP__8
+
+SET_NOTE2__8:
+             LD   (DIV_2__8),DE
+             LD   A,IYH
+             LD   HL,OUT_2__8
+             RES  4,(HL)
+             LD   HL,$0000
+             LD   (CNT_2__8),HL
+             JP   READ_LOOP__8
+
+SET_STOP__8:
+             LD   HL,$0000
+             LD   A,IYL
+             OR   A
+             JR   NZ,SET_STOP2__8
+             ; Stop channel 1 note
+             LD   (DIV_1A__8),HL
+             LD   (DIV_1B__8),HL
+             LD   HL,OUT_1__8
+             RES  4,(HL)
+             LD   IYL,1
+             JP   READ_LOOP__8
+SET_STOP2__8:
+             ; Stop channel 2 note
+             LD   (DIV_2__8),HL
+             LD   HL,OUT_2__8
+             RES  4,(HL)
+             JP   READ_LOOP__8
+
+OTHER__8:       CP   $3C
+             JR   Z,SET_STOP__8                   ; Stop note
+             CP   $3E
+             JR   Z,SKIP_CH1__8                   ; No changes to channel 1
+             INC  HL                           ; Instrument change
+             LD   L,(HL)
+             LD   H,$00
+             ADD  HL,HL
+             LD   DE,(NOTE_PTR__8)
+             INC  DE
+             LD   (NOTE_PTR__8),DE                ; Increment the note pointer
+
+             DEFB $01                          ; LD BC,nn
+INSTRUM_TBL__8:
+             DEFW $0000
+
+             ADD  HL,BC
+             LD   (CURRENT_INST__8),HL
+             JP   READ_LOOP__8
+
+SKIP_CH1__8:
+             LD   IYL,$01
+             JP   READ_LOOP__8
+
+EXIT_PLAYER__8:
+             LD   HL,$2758
+             EXX
+             POP  IY
+             EI
+             RET
+
+RENDER__8:
+             AND  $7F                          ; L813A
+             CP   $76
+             JP   NC,DRUMS__8
+             LD   D,A
+             EXX
+             DEFB $21                          ; LD HL,nn
+CNT_1A__8:      DEFW $0000
+             DEFB $DD,$21                      ; LD IX,nn
+CNT_1B__8:      DEFW $0000
+             DEFB $01                          ; LD BC,nn
+DIV_1A__8:      DEFW $0000
+             DEFB $11                          ; LD DE,nn
+DIV_1B__8:      DEFW $0000
+             DEFB $3E                          ; LD A,n
+OUT_1__8:       DEFB $0
+             EXX
+             EX   AF,AF'
+             DEFB $21                          ; LD HL,nn
+CNT_2__8:       DEFW $0000
+             DEFB $01                          ; LD BC,nn
+DIV_2__8:       DEFW $0000
+             DEFB $3E                          ; LD A,n
+OUT_2__8:       DEFB $00
+
+PLAY_NOTE__8:
+             ; Read keyboard
+             LD   E,A
+             XOR  A
+             IN   A,($FE)
+             OR   $E0
+             INC  A
+
+PLAYER_WAIT_KEY__8:
+             JR   NZ,EXIT_PLAYER__8
+             LD   A,E
+             LD   E,0
+
+L8168__8:       EXX
+             EX   AF,AF'
+             ADD  HL,BC
+             OUT  ($FE),A
+             JR   C,L8171__8
+             JR   L8173__8
+L8171__8:       XOR  $10
+L8173__8:       ADD  IX,DE
+             JR   C,L8179__8
+             JR   L817B__8
+L8179__8:       XOR  $10
+L817B__8:       EX   AF,AF'
+             OUT  ($FE),A
+             EXX
+             ADD  HL,BC
+             JR   C,L8184__8
+             JR   L8186__8
+L8184__8:       XOR  $10
+L8186__8:       NOP
+             JP   L818A__8
+
+L818A__8:       EXX
+             EX   AF,AF'
+             ADD  HL,BC
+             OUT  ($FE),A
+             JR   C,L8193__8
+             JR   L8195__8
+L8193__8:       XOR  $10
+L8195__8:       ADD  IX,DE
+             JR   C,L819B__8
+             JR   L819D__8
+L819B__8:       XOR  $10
+L819D__8:       EX   AF,AF'
+             OUT  ($FE),A
+             EXX
+             ADD  HL,BC
+             JR   C,L81A6__8
+             JR   L81A8__8
+L81A6__8:       XOR  $10
+L81A8__8:       NOP
+             JP   L81AC__8
+
+L81AC__8:       EXX
+             EX   AF,AF'
+             ADD  HL,BC
+             OUT  ($FE),A
+             JR   C,L81B5__8
+             JR   L81B7__8
+L81B5__8:       XOR  $10
+L81B7__8:       ADD  IX,DE
+             JR   C,L81BD__8
+             JR   L81BF__8
+L81BD__8:       XOR  $10
+L81BF__8:       EX   AF,AF'
+             OUT  ($FE),A
+             EXX
+             ADD  HL,BC
+             JR   C,L81C8__8
+             JR   L81CA__8
+L81C8__8:       XOR  $10
+L81CA__8:       NOP
+             JP   L81CE__8
+
+L81CE__8:       EXX
+             EX   AF,AF'
+             ADD  HL,BC
+             OUT  ($FE),A
+             JR   C,L81D7__8
+             JR   L81D9__8
+L81D7__8:       XOR  $10
+L81D9__8:       ADD  IX,DE
+             JR   C,L81DF__8
+             JR   L81E1__8
+L81DF__8:       XOR  $10
+L81E1__8:       EX   AF,AF'
+             OUT  ($FE),A
+             EXX
+             ADD  HL,BC
+             JR   C,L81EA__8
+             JR   L81EC__8
+L81EA__8:       XOR  $10
+
+L81EC__8:       DEC  E
+             JP   NZ,L8168__8
+
+             EXX
+             EX   AF,AF'
+             ADD  HL,BC
+             OUT  ($FE),A
+             JR   C,L81F9__8
+             JR   L81FB__8
+L81F9__8:       XOR  $10
+L81FB__8:       ADD  IX,DE
+             JR   C,L8201__8
+             JR   L8203__8
+L8201__8:       XOR  $10
+L8203__8:       EX   AF,AF'
+             OUT  ($FE),A
+             EXX
+             ADD  HL,BC
+             JR   C,L820C__8
+             JR   L820E__8
+L820C__8:       XOR  $10
+
+L820E__8:       DEC  D
+             JP   NZ,PLAY_NOTE__8
+
+             LD   (CNT_2__8),HL
+             LD   (OUT_2__8),A
+             EXX
+             EX   AF,AF'
+             LD   (CNT_1A__8),HL
+             LD   (CNT_1B__8),IX
+             LD   (OUT_1__8),A
+             JP   MAIN_LOOP__8
+
+; ************************************************************
+; * DRUMS__8 - Synthesised
+; ************************************************************
+DRUMS__8:
+             ADD  A,A                          ; On entry A=$75+Drum number (i.e. $76 to $7E)
+             LD   B,0
+             LD   C,A
+             LD   HL,DRUM_TABLE__8 - 236
+             ADD  HL,BC
+             LD   E,(HL)
+             INC  HL
+             LD   D,(HL)
+             EX   DE,HL
+             JP   (HL)
+
+DRUM_TONE1__8:  LD   L,16
+             JR   DRUM_TONE__8
+DRUM_TONE2__8:  LD   L,12
+             JR   DRUM_TONE__8
+DRUM_TONE3__8:  LD   L,8
+             JR   DRUM_TONE__8
+DRUM_TONE4__8:  LD   L,6
+             JR   DRUM_TONE__8
+DRUM_TONE5__8:  LD   L,4
+             JR   DRUM_TONE__8
+DRUM_TONE6__8:  LD   L,2
+DRUM_TONE__8:
+             LD   DE,3700
+             LD   BC,$0101
+             LD   A,BORDER_COL__8
+DT_LOOP0__8:    OUT  ($FE),A
+             DEC  B
+             JR   NZ,DT_LOOP1__8
+             XOR  16
+             LD   B,C
+             EX   AF,AF'
+             LD   A,C
+             ADD  A,L
+             LD   C,A
+             EX   AF,AF'
+DT_LOOP1__8:    DEC  E
+             JR   NZ,DT_LOOP0__8
+             DEC  D
+             JR   NZ,DT_LOOP0__8
+             JP   MAIN_LOOP__8
+
+DRUM_NOISE1__8: LD   DE,2480
+             LD   IXL,1
+             JR   DRUM_NOISE__8
+DRUM_NOISE2__8: LD   DE,1070
+             LD   IXL,10
+             JR   DRUM_NOISE__8
+DRUM_NOISE3__8: LD   DE,365
+             LD   IXL,101
+DRUM_NOISE__8:
+             LD   H,D
+             LD   L,E
+             LD   A,BORDER_COL__8
+             LD   C,A
+DN_LOOP0__8:    LD   A,(HL)
+             AND  16
+             OR   C
+             OUT  ($FE),A
+             LD   B,IXL
+DN_LOOP1__8:    DJNZ DN_LOOP1__8
+             INC  HL
+             DEC  E
+             JR   NZ,DN_LOOP0__8
+             DEC  D
+             JR   NZ,DN_LOOP0__8
+             JP   MAIN_LOOP__8
+
+PATTERN_ADDR__8:   DEFW  $0000
+PATTERN_PTR__8:    DEFB  0
+NOTE_PTR__8:       DEFW  $0000
+
+; **************************************************************
+; * Frequency Table
+; **************************************************************
+FREQ_TABLE__8:
+             DEFW 178,189,200,212,225,238,252,267,283,300,318,337
+             DEFW 357,378,401,425,450,477,505,535,567,601,637,675
+             DEFW 715,757,802,850,901,954,1011,1071,1135,1202,1274,1350
+             DEFW 1430,1515,1605,1701,1802,1909,2023,2143,2270,2405,2548,2700
+             DEFW 2860,3030,3211,3402,3604,3818,4046,4286,4541,4811,5097,5400
+
+; *****************************************************************
+; * Synth Drum Lookup Table
+; *****************************************************************
+DRUM_TABLE__8:
+             DEFW DRUM_TONE1__8,DRUM_TONE2__8,DRUM_TONE3__8,DRUM_TONE4__8,DRUM_TONE5__8,DRUM_TONE6__8
+             DEFW DRUM_NOISE1__8,DRUM_NOISE2__8,DRUM_NOISE3__8
+
+
+MUSICDATA__8:
+             DEFB 0  ; Pattern loop begin * 2
+             DEFB 56  ; Song length * 2
+             DEFW 16         ; Offset to START__8 of song (length of instrument table)
+             DEFB 1      ; Multiple
+             DEFW 0      ; Detune
+             DEFB 0      ; Phase
+             DEFB 2      ; Multiple
+             DEFW 7      ; Detune
+             DEFB 0      ; Phase
+             DEFB 1      ; Multiple
+             DEFW 48      ; Detune
+             DEFB 2      ; Phase
+             DEFB 1      ; Multiple
+             DEFW 2      ; Detune
+             DEFB 0      ; Phase
+
+PATTERNDATA__8:        DEFW      PAT6__8
+                    DEFW      PAT7__8
+                    DEFW      PAT6__8
+                    DEFW      PAT8__8
+                    DEFW      PAT0__8
+                    DEFW      PAT1__8
+                    DEFW      PAT0__8
+                    DEFW      PAT10__8
+                    DEFW      PAT2__8
+                    DEFW      PAT3__8
+                    DEFW      PAT2__8
+                    DEFW      PAT4__8
+                    DEFW      PAT2__8
+                    DEFW      PAT3__8
+                    DEFW      PAT2__8
+                    DEFW      PAT4__8
+                    DEFW      PAT2__8
+                    DEFW      PAT3__8
+                    DEFW      PAT2__8
+                    DEFW      PAT4__8
+                    DEFW      PAT2__8
+                    DEFW      PAT3__8
+                    DEFW      PAT2__8
+                    DEFW      PAT9__8
+                    DEFW      PAT5__8
+                    DEFW      PAT5__8
+                    DEFW      PAT5__8
+                    DEFW      PAT5__8
+
+; *** Pattern data - $00 marks the end of a pattern ***
+PAT0__8:
+         DEFB $BD,0
+         DEFB 224
+         DEFB 129
+         DEFB 121
+     DEFB 2
+         DEFB 160
+         DEFB 188
+         DEFB 118
+     DEFB 2
+         DEFB 188
+         DEFB 153
+     DEFB 3
+         DEFB 160
+         DEFB 129
+         DEFB 122
+     DEFB 2
+         DEFB 161
+         DEFB 188
+         DEFB 121
+     DEFB 2
+         DEFB 188
+         DEFB 153
+     DEFB 3
+         DEFB 161
+         DEFB 129
+         DEFB 120
+     DEFB 2
+         DEFB 160
+         DEFB 188
+         DEFB 118
+     DEFB 2
+         DEFB 188
+         DEFB 153
+     DEFB 3
+         DEFB 160
+         DEFB 188
+         DEFB 118
+     DEFB 2
+         DEFB 156
+         DEFB 141
+         DEFB 123
+     DEFB 2
+         DEFB 156
+         DEFB 153
+     DEFB 3
+         DEFB 156
+         DEFB 188
+     DEFB 3
+         DEFB 160
+         DEFB 142
+         DEFB 118
+     DEFB 2
+         DEFB 158
+         DEFB 154
+     DEFB 3
+         DEFB 160
+         DEFB 130
+         DEFB 118
+     DEFB 2
+         DEFB $00
+PAT1__8:
+         DEFB $BD,0
+         DEFB 160
+         DEFB 188
+         DEFB 121
+     DEFB 2
+         DEFB 160
+         DEFB 141
+         DEFB 118
+     DEFB 2
+         DEFB 188
+         DEFB 153
+     DEFB 3
+         DEFB 160
+         DEFB 188
+         DEFB 122
+     DEFB 2
+         DEFB 161
+         DEFB 141
+         DEFB 121
+     DEFB 2
+         DEFB 188
+         DEFB 153
+     DEFB 3
+         DEFB 161
+         DEFB 188
+         DEFB 120
+     DEFB 2
+         DEFB 160
+         DEFB 141
+         DEFB 118
+     DEFB 2
+         DEFB 188
+         DEFB 129
+     DEFB 3
+         DEFB 160
+         DEFB 129
+         DEFB 118
+     DEFB 2
+         DEFB 158
+         DEFB 188
+         DEFB 123
+     DEFB 2
+         DEFB 188
+         DEFB 153
+     DEFB 3
+         DEFB 158
+         DEFB 188
+     DEFB 3
+         DEFB 149
+         DEFB 142
+         DEFB 118
+     DEFB 2
+         DEFB 158
+         DEFB 154
+     DEFB 3
+         DEFB 163
+         DEFB 130
+         DEFB 118
+     DEFB 2
+         DEFB $00
+PAT2__8:
+         DEFB $BD,0
+         DEFB 172
+         DEFB 129
+         DEFB 121
+     DEFB 2
+         DEFB 160
+         DEFB 141
+         DEFB 118
+     DEFB 2
+         DEFB 188
+         DEFB 153
+     DEFB 3
+         DEFB 172
+         DEFB 129
+         DEFB 122
+     DEFB 2
+         DEFB 161
+         DEFB 141
+         DEFB 126
+     DEFB 2
+         DEFB 188
+         DEFB 153
+     DEFB 3
+         DEFB 173
+         DEFB 129
+         DEFB 120
+     DEFB 2
+         DEFB 160
+         DEFB 141
+         DEFB 118
+     DEFB 2
+         DEFB 188
+         DEFB 153
+     DEFB 3
+         DEFB 172
+         DEFB 129
+         DEFB 118
+     DEFB 2
+         DEFB 156
+         DEFB 141
+         DEFB 123
+     DEFB 2
+         DEFB 156
+         DEFB 153
+         DEFB 126
+     DEFB 2
+         DEFB 168
+         DEFB 130
+     DEFB 3
+         DEFB 160
+         DEFB 142
+         DEFB 118
+     DEFB 2
+         DEFB 170
+         DEFB 154
+         DEFB 118
+     DEFB 2
+         DEFB 172
+         DEFB 130
+         DEFB 118
+     DEFB 2
+         DEFB $00
+PAT3__8:
+         DEFB $BD,0
+         DEFB 172
+         DEFB 129
+         DEFB 121
+     DEFB 2
+         DEFB 160
+         DEFB 141
+         DEFB 118
+     DEFB 2
+         DEFB 188
+         DEFB 153
+     DEFB 3
+         DEFB 172
+         DEFB 129
+         DEFB 122
+     DEFB 2
+         DEFB 160
+         DEFB 141
+         DEFB 126
+     DEFB 2
+         DEFB 188
+         DEFB 153
+     DEFB 3
+         DEFB 173
+         DEFB 129
+         DEFB 120
+     DEFB 2
+         DEFB 160
+         DEFB 141
+         DEFB 118
+     DEFB 2
+         DEFB 188
+         DEFB 153
+     DEFB 3
+         DEFB 172
+         DEFB 129
+         DEFB 119
+     DEFB 2
+         DEFB 156
+         DEFB 141
+         DEFB 126
+     DEFB 2
+         DEFB 156
+         DEFB 153
+         DEFB 126
+     DEFB 2
+         DEFB 168
+         DEFB 130
+     DEFB 3
+         DEFB 161
+         DEFB 142
+         DEFB 118
+     DEFB 2
+         DEFB 188
+         DEFB 154
+         DEFB 118
+     DEFB 2
+         DEFB 190
+         DEFB 130
+         DEFB 118
+     DEFB 2
+         DEFB $00
+PAT4__8:
+         DEFB $BD,0
+         DEFB 172
+         DEFB 129
+         DEFB 121
+     DEFB 2
+         DEFB 160
+         DEFB 141
+         DEFB 118
+     DEFB 2
+         DEFB 188
+         DEFB 153
+     DEFB 3
+         DEFB 172
+         DEFB 129
+         DEFB 122
+     DEFB 2
+         DEFB 161
+         DEFB 141
+         DEFB 126
+     DEFB 2
+         DEFB 188
+         DEFB 153
+     DEFB 3
+         DEFB 173
+         DEFB 129
+         DEFB 120
+     DEFB 2
+         DEFB 160
+         DEFB 141
+         DEFB 118
+     DEFB 2
+         DEFB 188
+         DEFB 153
+     DEFB 3
+         DEFB $BD,6
+         DEFB 172
+         DEFB 129
+         DEFB 118
+     DEFB 2
+         DEFB 158
+         DEFB 141
+         DEFB 126
+     DEFB 2
+         DEFB 188
+         DEFB 153
+         DEFB 126
+     DEFB 2
+         DEFB $BD,4
+         DEFB 187
+         DEFB 129
+     DEFB 3
+         DEFB $BD,2
+         DEFB 180
+         DEFB 153
+         DEFB 118
+     DEFB 2
+         DEFB $BD,2
+         DEFB 170
+         DEFB 141
+         DEFB 118
+     DEFB 2
+         DEFB $BD,0
+         DEFB 173
+         DEFB 129
+         DEFB 118
+     DEFB 2
+         DEFB $00
+PAT5__8:
+         DEFB $BD,2
+         DEFB 148
+         DEFB 129
+         DEFB 121
+     DEFB 2
+         DEFB 160
+         DEFB 141
+         DEFB 118
+     DEFB 2
+         DEFB 190
+         DEFB 153
+     DEFB 3
+         DEFB 148
+         DEFB 129
+         DEFB 122
+     DEFB 2
+         DEFB 149
+         DEFB 141
+         DEFB 121
+     DEFB 2
+         DEFB 190
+         DEFB 153
+     DEFB 3
+         DEFB 161
+         DEFB 129
+         DEFB 120
+     DEFB 2
+         DEFB 148
+         DEFB 141
+         DEFB 118
+     DEFB 2
+         DEFB 190
+         DEFB 153
+     DEFB 3
+         DEFB $BD,6
+         DEFB 148
+         DEFB 129
+         DEFB 118
+     DEFB 2
+         DEFB 134
+         DEFB 141
+         DEFB 123
+     DEFB 2
+         DEFB 188
+         DEFB 153
+     DEFB 3
+         DEFB 158
+         DEFB 130
+     DEFB 3
+         DEFB 149
+         DEFB 142
+         DEFB 118
+     DEFB 2
+         DEFB 146
+         DEFB 154
+     DEFB 3
+         DEFB 151
+         DEFB 130
+         DEFB 118
+     DEFB 2
+         DEFB $00
+PAT6__8:
+         DEFB $BD,0
+         DEFB 224
+         DEFB 129
+         DEFB 119
+     DEFB 2
+         DEFB 160
+         DEFB 188
+     DEFB 3
+         DEFB 188
+         DEFB 153
+     DEFB 3
+         DEFB 160
+         DEFB 129
+         DEFB 118
+     DEFB 2
+         DEFB 161
+         DEFB 188
+     DEFB 3
+         DEFB 188
+         DEFB 153
+     DEFB 3
+         DEFB 161
+         DEFB 129
+     DEFB 3
+         DEFB 160
+         DEFB 188
+     DEFB 3
+         DEFB 188
+         DEFB 153
+     DEFB 3
+         DEFB 160
+         DEFB 188
+     DEFB 3
+         DEFB 156
+         DEFB 141
+     DEFB 3
+         DEFB 156
+         DEFB 153
+     DEFB 3
+         DEFB 156
+         DEFB 188
+     DEFB 3
+         DEFB $BD,6
+         DEFB 148
+         DEFB 142
+     DEFB 3
+         DEFB 146
+         DEFB 154
+     DEFB 3
+         DEFB 160
+         DEFB 130
+     DEFB 3
+         DEFB $00
+PAT7__8:
+         DEFB $BD,0
+         DEFB 224
+         DEFB 188
+         DEFB 119
+     DEFB 2
+         DEFB 160
+         DEFB 141
+     DEFB 3
+         DEFB 188
+         DEFB 153
+     DEFB 3
+         DEFB 160
+         DEFB 188
+         DEFB 118
+     DEFB 2
+         DEFB 161
+         DEFB 141
+     DEFB 3
+         DEFB 188
+         DEFB 153
+     DEFB 3
+         DEFB 149
+         DEFB 188
+     DEFB 3
+         DEFB 160
+         DEFB 141
+     DEFB 3
+         DEFB 188
+         DEFB 129
+     DEFB 3
+         DEFB 160
+         DEFB 129
+     DEFB 3
+         DEFB 158
+         DEFB 188
+     DEFB 3
+         DEFB 188
+         DEFB 153
+     DEFB 3
+         DEFB 158
+         DEFB 188
+     DEFB 3
+         DEFB $BD,6
+         DEFB 149
+         DEFB 142
+     DEFB 3
+         DEFB 146
+         DEFB 154
+     DEFB 3
+         DEFB 163
+         DEFB 130
+     DEFB 3
+         DEFB $00
+PAT8__8:
+         DEFB $BD,0
+         DEFB 224
+         DEFB 188
+         DEFB 118
+     DEFB 2
+         DEFB 160
+         DEFB 141
+     DEFB 3
+         DEFB 188
+         DEFB 153
+     DEFB 3
+         DEFB 160
+         DEFB 188
+         DEFB 118
+     DEFB 2
+         DEFB 161
+         DEFB 141
+     DEFB 3
+         DEFB 188
+         DEFB 153
+     DEFB 3
+         DEFB 161
+         DEFB 188
+     DEFB 3
+         DEFB 160
+         DEFB 141
+     DEFB 3
+         DEFB 188
+         DEFB 129
+     DEFB 3
+         DEFB 160
+         DEFB 129
+     DEFB 3
+         DEFB 158
+         DEFB 188
+     DEFB 3
+         DEFB 188
+         DEFB 153
+     DEFB 3
+         DEFB $BD,6
+         DEFB 158
+         DEFB 188
+         DEFB 119
+     DEFB 2
+         DEFB 149
+         DEFB 119
+     DEFB 2
+         DEFB 146
+         DEFB 123
+     DEFB 2
+         DEFB 163
+         DEFB 123
+     DEFB 2
+         DEFB $00
+PAT9__8:
+         DEFB $BD,0
+         DEFB 172
+         DEFB 129
+         DEFB 121
+     DEFB 2
+         DEFB 160
+         DEFB 141
+         DEFB 118
+     DEFB 2
+         DEFB 188
+         DEFB 153
+     DEFB 3
+         DEFB 172
+         DEFB 129
+         DEFB 122
+     DEFB 2
+         DEFB 161
+         DEFB 141
+         DEFB 126
+     DEFB 2
+         DEFB 188
+         DEFB 153
+     DEFB 3
+         DEFB 173
+         DEFB 129
+         DEFB 120
+     DEFB 2
+         DEFB 160
+         DEFB 141
+         DEFB 118
+     DEFB 2
+         DEFB 188
+         DEFB 153
+     DEFB 3
+         DEFB 172
+         DEFB 129
+         DEFB 118
+     DEFB 2
+         DEFB 156
+         DEFB 141
+         DEFB 123
+     DEFB 2
+         DEFB 156
+         DEFB 153
+         DEFB 126
+     DEFB 2
+         DEFB 168
+         DEFB 130
+         DEFB 120
+     DEFB 2
+         DEFB 188
+         DEFB 142
+         DEFB 120
+     DEFB 2
+         DEFB 190
+         DEFB 154
+         DEFB 120
+     DEFB 2
+         DEFB 190
+         DEFB 130
+         DEFB 120
+     DEFB 2
+         DEFB $00
+PAT10__8:
+         DEFB $BD,0
+         DEFB 160
+         DEFB 188
+         DEFB 121
+     DEFB 2
+         DEFB 160
+         DEFB 141
+         DEFB 118
+     DEFB 2
+         DEFB 188
+         DEFB 153
+     DEFB 3
+         DEFB 160
+         DEFB 188
+         DEFB 122
+     DEFB 2
+         DEFB 161
+         DEFB 141
+         DEFB 121
+     DEFB 2
+         DEFB 188
+         DEFB 153
+     DEFB 3
+         DEFB 161
+         DEFB 188
+         DEFB 120
+     DEFB 2
+         DEFB 160
+         DEFB 141
+         DEFB 118
+     DEFB 2
+         DEFB 188
+         DEFB 129
+     DEFB 3
+         DEFB 160
+         DEFB 129
+         DEFB 118
+     DEFB 2
+         DEFB 158
+         DEFB 188
+         DEFB 123
+     DEFB 2
+         DEFB 188
+         DEFB 153
+     DEFB 3
+         DEFB 158
+         DEFB 188
+     DEFB 3
+         DEFB 149
+     DEFB 3
+         DEFB 146
+     DEFB 3
+         DEFB 227
+     DEFB 3
+         DEFB $00
+
+    .align 256
+begin_of_buffers:
+    .fillb 34 * 25 * 2, 0x77
+
+    .align 32
+level_data:
+    .fillb 32 * 24 * 2, 0xCC
+safe_level_zone:
+    .dw 0
+
+
+last_byte:
+    .db 0xAB // end of
+
+    .trace "level_data = ", level_data
+    .trace "last_byte = ", last_byte
+

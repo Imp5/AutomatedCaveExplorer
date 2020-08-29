@@ -1,0 +1,337 @@
+<!DOCTYPE HTML>
+<html>
+<body >
+  <div>
+  O - Open</br>
+  S - Save</br>
+  Ctrl+Z - Undo</br>
+  </div>
+  <canvas id="map_canvas" width="1088" height="704"
+    onmousedown="on_mouse_down(event); return false;"
+    onmousemove="on_mouse_move(event); return false;"
+    onmouseup="on_mouse_up(event); return false;"
+    ></canvas>
+  <img id="img_tiles" src="tiles.png" onmousedown="on_select_tile(event); return false;">
+  <canvas id="select_canvas" width="32" height="32"></canvas>
+  <br>
+  type(0,4,8,12):<input id="cave_input" type="text"></input> crystals to collect:<input id="crystals_input" type="text"></input>
+  <span id="crystals_span">000<span>
+</body>
+<script>
+
+var ctx = null;
+var ctxSelect = null;
+var tiles = null;
+var brush = -1;
+var down = false;
+
+var a = [];
+var hist = [];
+
+var fileName = "level.ogg"
+
+function clearLevel()
+{
+  a = [];
+  var row = []
+  for (var x = 0; x < 32; x++)
+    row.push(1);
+
+  for (var y = 0; y < 22; y++)
+    a.push(row.slice(0));
+}
+
+
+
+function renderLevel()
+{
+  var crystals = 0;
+  for (var y = 0; y < 22; y++)
+    for (var x = 0; x < 32; x++)
+    {
+      var b = a[y][x];
+      var srcX = Math.floor(b / 4) * 32;
+      var srcY = (b % 4) * 32;
+      ctx.drawImage(tiles, srcX, srcY, 32, 32, x * 32, y * 32, 32, 32);
+
+      if (b == 9)
+        crystals++;
+
+      if (b == 14)
+        crystals += 9;
+    }
+
+  document.getElementById("crystals_span").innerText = crystals;
+}
+
+
+function drawSelectedBrush()
+{
+  var srcX = Math.floor(brush / 4) * 32;
+  var srcY = (brush % 4) * 32;
+  ctxSelect.drawImage(tiles, srcX, srcY, 32, 32, 0, 0, 32, 32);
+}
+
+
+function on_mouse_down(ev)
+{
+  if (down)
+    return;
+
+  hist.push(JSON.stringify(a));
+
+  var x = Math.floor(ev.offsetX / 32);
+  var y = Math.floor(ev.offsetY / 32);
+  if (x < 0 || x >= 32 || y < 0 || y >= 22)
+    return;
+
+  down = true;
+  a[y][x] = brush;
+  renderLevel();
+}
+
+
+function on_mouse_move(ev)
+{
+  if (!down)
+    return;
+
+  var x = Math.floor(ev.offsetX / 32);
+  var y = Math.floor(ev.offsetY / 32);
+  if (x < 0 || x >= 32 || y < 0 || y >= 22)
+    return;
+
+  a[y][x] = brush;
+  renderLevel();
+}
+
+
+function on_mouse_up(ev)
+{
+  down = false;
+}
+
+
+function on_select_tile(ev)
+{
+  var idx = Math.floor(ev.offsetX / 32) * 4 + Math.floor(ev.offsetY / 32);
+  if (idx < 0)
+    idx = 0;
+  if (idx > 31)
+    idx = 31;
+  brush = idx;
+  drawSelectedBrush();
+}
+
+
+function unpackLevel(data)
+{
+  document.getElementById("cave_input").value = data[0];
+  document.getElementById("crystals_input").value = data[1];
+  var x = 0;
+  var y = 0;
+  for (var i = 2; i < data.length; i++)
+  {
+    var v = data[i] & 31;
+    var cnt = Math.floor(data[i] / 32) + 1;
+    for (var j = 0; j < cnt; j++)
+    {
+      a[y][x] = v;
+      x++;
+      if (x == 32)
+      {
+        x = 0;
+        y++;
+      }
+    }
+  }
+}
+
+
+function packLevel()
+{
+  var raw = [];
+  raw.push(0 + document.getElementById("cave_input").value);
+  raw.push(0 + document.getElementById("crystals_input").value);
+
+  for (var y = 0; y < 22; y++)
+    for (var x = 0; x < 32; x++)
+      raw.push(a[y][x]);
+
+  var packed = [];
+  var cnt = 0;
+  var v = raw[0];
+  for (var i = 1; i < raw.length; i++)
+  {
+    if (raw[i] != v || cnt == 7)
+    {
+      packed.push(v | (cnt * 32));
+      v = raw[i];
+      cnt = 0;
+    }
+    else
+    {
+      cnt++;
+    }
+  }
+
+  packed.push(v | (cnt * 32));
+
+
+  var res = new Uint8Array(packed.length);
+  for (var i = 0; i < packed.length; i++)
+    res[i] = packed[i];
+
+  return res;
+}
+
+
+function loadLevel()
+{
+  var input = document.createElement('input');
+  input.type = 'file';
+
+  input.onchange = e => {
+    var file = e.target.files[0];
+    fileName = file.name;
+
+    var reader = new FileReader();
+    reader.readAsArrayBuffer(file);
+
+    reader.onload = readerEvent => {
+      var content = new Uint8Array(readerEvent.target.result);
+      unpackLevel(content);
+      renderLevel();
+    }
+  }
+
+  input.onclick = destroyClickedElement;
+  input.click();
+}
+
+
+function saveBinFile(data)
+{
+  var textFileAsBlob = new Blob([data], {type:'audio/ogg'});
+  var fileNameToSaveAs = fileName;// document.getElementById("inputFileNameToSaveAs").value;
+  var downloadLink = document.createElement("a");
+  downloadLink.download = fileNameToSaveAs;
+  downloadLink.innerHTML = "Download File";
+  if (window.webkitURL != null)
+  {
+    // Chrome allows the link to be clicked
+    // without actually adding it to the DOM.
+    downloadLink.href = window.webkitURL.createObjectURL(textFileAsBlob);
+  }
+  else
+  {
+    // Firefox requires the link to be added to the DOM
+    // before it can be clicked.
+    downloadLink.href = window.URL.createObjectURL(textFileAsBlob);
+    downloadLink.onclick = destroyClickedElement;
+    downloadLink.style.display = "none";
+    document.body.appendChild(downloadLink);
+  }
+  downloadLink.click();
+}
+
+
+function destroyClickedElement(event)
+{
+//  document.body.removeChild(event.target);
+}
+
+
+
+function saveLevel()
+{
+  var data = packLevel();
+  saveBinFile(data);
+}
+
+
+window.onload = function ()
+{
+  var canvas = document.getElementById("map_canvas");
+  ctx = canvas.getContext("2d");
+
+  canvas = document.getElementById("select_canvas");
+  ctxSelect = canvas.getContext("2d");
+
+  tiles = document.getElementById("img_tiles");
+
+  brush = 0;
+  drawSelectedBrush();
+  clearLevel();
+  renderLevel();
+}
+
+
+function loadLevelFromTxt()
+{
+  var data = [
+  "cccccccccccccccccccccccccccccccc",
+  "cjjbbbbaaabbbobbakjmnkjkbkjkjkkc",
+  "cbbbbbbbbbabbbbabbkkkkkkbkkjkbjc",
+  "cbbbjbbbbbaabbbbbabkkkkkbkkbbkbc",
+  "cbbbbbbbbbbbaaaajabkkkkbbbbkbbbc",
+  "caaaaaaaaaabjjjbbaabbkbabkbbbbkc",
+  "cabbbaaaabbbjbjbkkaabbaaabaaabbc",
+  "cbbbjaaafffffffffkkaaaaaaabobbjc",
+  "cabbbaaaabbbbbaafkkkffaaaaabbbjc",
+  "cbbbaaaaabfffbaafffffaaaaabbobbc",
+  "caaaaaaaaafffaaaaajkjkjbabobbbkc",
+  "caaaaaaaaalilaajaabjkjbaabbbbbbc",
+  "cabbbbbbdddddbbbkaabbbaaabkbokbc",
+  "caabbayaaaaaaajbjbaaaaaabbodddbc",
+  "caaaaaaaaaaaaabkbaaaaaaaabdddddc",
+  "caccccbbddddbaabbabbdddddddddddc",
+  "cjcpbcbbddddbaaaaaabddddddddjkdc",
+  "cecjjcbbbbbddbaaaabddddjkjkjkddc",
+  "cacjkcbbddbbbbbbbdddjkjkjkjkjkdc",
+  "cacjbcbbddddddddddddddbbbbbddddc",
+  "cgcbbbbbbbjjbjbbbbjbbbbbbbbddddc",
+  "cccccccccccccccccccccccccccccccc"
+  ]
+
+  for (var y = 0; y < data.length; y++)
+    for (var x = 0; x < data[y].length; x++)
+    {
+      var val = data[y].charCodeAt(x) - "a".charCodeAt(0);
+      a[y][x] = val; 
+    }
+
+  renderLevel();
+}
+
+
+document.addEventListener('keydown', function(event)
+{
+  if (event.code == 'KeyZ' && (event.ctrlKey || event.metaKey))
+  {
+    if (hist.length > 0)
+    {
+      a = JSON.parse(hist.pop());
+      renderLevel();
+    }
+  }
+
+  if (event.code == 'KeyO')
+  {
+    loadLevel();
+  }
+
+  if (event.code == 'KeyS')
+  {
+    saveLevel();
+  }
+
+  if (event.code == 'KeyT')
+  {
+    loadLevelFromTxt();
+  }
+
+});
+
+</script>
+</html>
