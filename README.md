@@ -1,5 +1,5 @@
 # Automated Cave Explorer
-A game for ZX Spectrum 48K written for Yandex Retro Games Battle 2020
+A game for ZX Spectrum 48K written for Yandex Retro Games Battle 2019
 
 ## TAP-file
 https://github.com/Imp5/AutomatedCaveExplorer/raw/master/TapeFiles/Automated_Cave_Explorer_48k.tap
