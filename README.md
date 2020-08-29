@@ -1,11 +1,16 @@
-# AutomatedCaveExplorer
+# Automated Cave Explorer
 A game for ZX Spectrum 48K written for Yandex Retro Games Battle 2020
 
-<img src="https://raw.githubusercontent.com/Imp5/AutomatedCaveExplorer/master/Screenshots/screen0.png" /> <img src="https://raw.githubusercontent.com/Imp5/AutomatedCaveExplorer/master/Screenshots/screen1.png" />
+## TAP-file
+https://github.com/Imp5/AutomatedCaveExplorer/raw/master/TapeFiles/Automated_Cave_Explorer_48k.tap
 
-<img src="https://raw.githubusercontent.com/Imp5/AutomatedCaveExplorer/master/Screenshots/screen2.png" /> <img src="https://raw.githubusercontent.com/Imp5/AutomatedCaveExplorer/master/Screenshots/screen3.png" />
+## Screenshots
 
-In-game video:
+[](https://raw.githubusercontent.com/Imp5/AutomatedCaveExplorer/master/Screenshots/screen0.png)  [](https://raw.githubusercontent.com/Imp5/AutomatedCaveExplorer/master/Screenshots/screen1.png)
+
+[](https://raw.githubusercontent.com/Imp5/AutomatedCaveExplorer/master/Screenshots/screen2.png)  [](https://raw.githubusercontent.com/Imp5/AutomatedCaveExplorer/master/Screenshots/screen3.png)
+
+## In-game video
 
 [![Automated Cave Explorer Walkthrough](https://img.youtube.com/vi/RaLi_eozBaU/0.jpg)](https://www.youtube.com/watch?v=RaLi_eozBaU "Automated Cave Explorer Walkthrough")
 
